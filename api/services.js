@@ -10,7 +10,7 @@ export default async function handler(req, res) {
   }
 
   const accounts = [];
-  for (let i = 1; i <= 10; i++) {
+  for (let i = 1; i <= 20; i++) {
     const key = process.env[`RENDER_API_KEY_${i}`];
     if (key) {
       accounts.push({

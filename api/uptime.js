@@ -20,8 +20,8 @@ export default async function handler(req, res) {
     keys.push(process.env.UPTIMEROBOT_API_KEY);
   }
 
-  // Support UPTIMEROBOT_API_KEY_1 .. _10 (multi-account)
-  for (let i = 1; i <= 10; i++) {
+  // Support UPTIMEROBOT_API_KEY_1 .. _20 (multi-account)
+  for (let i = 1; i <= 20; i++) {
     const k = process.env[`UPTIMEROBOT_API_KEY_${i}`];
     if (k && !keys.includes(k)) keys.push(k);
   }

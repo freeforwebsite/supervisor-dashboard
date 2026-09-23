@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   if (process.env.UPDOWN_API_KEY) {
     keys.push(process.env.UPDOWN_API_KEY);
   }
-  for (let i = 1; i <= 12; i++) {
+  for (let i = 1; i <= 20; i++) {
     const k = process.env[`UPDOWN_API_KEY_${i}`];
     if (k && !keys.includes(k)) keys.push(k);
   }
