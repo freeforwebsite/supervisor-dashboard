@@ -849,7 +849,16 @@ function renderServices(servicesToRender) {
       el.innerHTML = `
         <div class="svc-head" data-toggle>
           <div class="svc-icon"><svg class="icon" viewBox="0 0 24 24">${icon('running')}</svg></div>
-          <div class="svc-title"><b>${svc.name}</b><span>${subtitle}</span></div>
+          <div class="svc-title">
+            <b>${svc.name}</b>
+            <span>${subtitle}</span>
+            ${svc.url ? `<div style="display:flex; align-items:center; gap:4px; margin-top:2px;">
+              <a href="${svc.url}" target="_blank" style="font-size:11px; color:var(--text-faint); text-decoration:none;" title="Open URL" onclick="event.stopPropagation()">${svc.url}</a>
+              <button class="btn-copy-url" data-url="${svc.url}" title="Copy URL" style="background:none; border:none; padding:2px; cursor:pointer; color:var(--text-dim); display:flex; align-items:center;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              </button>
+            </div>` : ''}
+          </div>
           ${badgeFor(svc.status)}
           <div class="uptime-row" id="uptime-row-${svc.id}"></div>
           <div class="svc-actions">
@@ -887,6 +896,18 @@ function renderServices(servicesToRender) {
           envLoaded = true;
           loadEnvInto(el.querySelector('[data-view="env"]'), svc);
         }
+      });
+
+      const copyBtns = el.querySelectorAll('.btn-copy-url');
+      copyBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          navigator.clipboard.writeText(btn.dataset.url).then(() => {
+            const og = btn.innerHTML;
+            btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+            setTimeout(() => { btn.innerHTML = og; }, 1500);
+          }).catch(err => console.error('Failed to copy', err));
+        });
       });
 
       const actionBtns = el.querySelectorAll('[data-action]');
