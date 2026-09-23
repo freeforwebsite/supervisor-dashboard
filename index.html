@@ -559,7 +559,7 @@
 <!-- Delete Service Modal -->
 <div id="delete-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center; padding: 20px;">
   <div class="card" style="width: 100%; max-width: 400px; padding: 24px;">
-    <h3 style="margin: 0 0 12px 0; color: var(--red);">Delete Service</h3>
+    <h3 id="delete-modal-title" style="margin: 0 0 12px 0; color: var(--red);">Delete</h3>
     <p id="delete-modal-msg" style="font-size:13.5px; margin:0 0 20px 0; line-height:1.5;"></p>
     <div style="display:flex; gap:8px;">
       <button class="btn" id="btn-cancel-delete" style="flex:1; justify-content:center;">Cancel</button>
@@ -667,12 +667,12 @@ document.getElementById('btn-open-bulk-delete').addEventListener('click', () => 
     const row = document.createElement('label');
     row.style.cssText = 'display:flex; align-items:center; gap:12px; padding:10px; border-bottom:1px solid var(--border); cursor:pointer; font-size:13px; margin:0;';
     row.innerHTML = `
-      <input type="checkbox" value="${svc.id}" data-account="${svc.account}" data-status="${svc.status}" class="bulk-cb" style="width:16px; height:16px; cursor:pointer;">
-      <div style="flex:1; display:flex; align-items:center; gap:8px;">
-        <div style="font-weight:600;">${svc.name}</div>
+      <input type="checkbox" value="${svc.id}" data-account="${svc.account}" data-status="${svc.status}" class="bulk-cb" style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
+      <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;">
+        <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${svc.name}</div>
         <div style="font-size:11.5px; color:var(--text-faint);">${svc.accountName}</div>
       </div>
-      ${badgeFor(svc.status)}
+      <div style="flex-shrink:0;">${badgeFor(svc.status)}</div>
     `;
     bulkDeleteList.appendChild(row);
   });
@@ -709,12 +709,14 @@ btnConfirmBulk.addEventListener('click', async () => {
   if (selected.length === 0) return;
   
   const runningCount = selected.filter(s => s.status === 'running' || s.status === 'live').length;
-  let msg = `Are you absolutely sure you want to permanently delete <strong>these ${selected.length} services</strong>?`;
+  const svcText = selected.length === 1 ? 'this 1 service' : `these ${selected.length} services`;
+  let msg = `Are you absolutely sure you want to permanently delete <strong>${svcText}</strong>?`;
   if (runningCount > 0) {
     msg += `<br><br><span style="color:var(--amber);">⚠️ Warning: <b>${runningCount}</b> of these services are currently running in the background!</span>`;
   }
   msg += `<br><br>This action cannot be undone.`;
 
+  document.getElementById('delete-modal-title').textContent = 'Delete Services';
   document.getElementById('delete-modal-msg').innerHTML = msg;
   document.getElementById('delete-modal').style.display = 'flex';
 
@@ -894,6 +896,7 @@ function renderServices(servicesToRender) {
           const action = btn.dataset.action;
           
           if (action === 'delete-service') {
+            document.getElementById('delete-modal-title').textContent = 'Delete Service';
             document.getElementById('delete-modal-msg').innerHTML = `Are you absolutely sure you want to permanently delete <strong style="color:var(--text);">${svc.name}</strong>?<br><br>This action cannot be undone.`;
             document.getElementById('delete-modal').style.display = 'flex';
             
@@ -1127,12 +1130,12 @@ document.getElementById('btn-open-bulk-delete-monitor').addEventListener('click'
     const statusText = m.statusLabel === 'up' ? 'Up' : m.statusLabel === 'down' ? 'Down' : m.statusLabel === 'seems_down' ? 'Seems down' : 'Paused';
     
     row.innerHTML = `
-      <input type="checkbox" value="${m.id}" data-account="${m.account}" data-source="${m.source}" class="bulk-cb-monitor" style="width:16px; height:16px; cursor:pointer;">
-      <div style="flex:1; display:flex; align-items:center; gap:8px;">
-        <div style="font-weight:600;">${m.name}</div>
+      <input type="checkbox" value="${m.id}" data-account="${m.account}" data-source="${m.source}" class="bulk-cb-monitor" style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
+      <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:2px;">
+        <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${m.name}</div>
         <div style="font-size:11.5px; color:var(--text-faint);">${m.source === 'updown' ? 'updown.io' : 'UptimeRobot'}</div>
       </div>
-      <span class="badge ${badgeClass}"><span class="bdot"></span>${statusText}</span>
+      <div style="flex-shrink:0;"><span class="badge ${badgeClass}"><span class="bdot"></span>${statusText}</span></div>
     `;
     bulkDeleteMonitorList.appendChild(row);
   });
@@ -1168,9 +1171,11 @@ btnConfirmBulkMonitor.addEventListener('click', async () => {
   
   if (selected.length === 0) return;
   
-  let msg = `Are you absolutely sure you want to permanently delete <strong>these ${selected.length} monitors</strong>?`;
+  const monitorText = selected.length === 1 ? 'this 1 monitor' : `these ${selected.length} monitors`;
+  let msg = `Are you absolutely sure you want to permanently delete <strong>${monitorText}</strong>?`;
   msg += `<br><br>This action cannot be undone.`;
 
+  document.getElementById('delete-modal-title').textContent = 'Delete Monitors';
   document.getElementById('delete-modal-msg').innerHTML = msg;
   document.getElementById('delete-modal').style.display = 'flex';
 
