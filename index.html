@@ -212,7 +212,23 @@
   .badge.green { background: var(--green-bg); color: var(--green); }
   .badge.amber { background: var(--amber-bg); color: var(--amber); }
   .badge.red { background: var(--red-bg); color: var(--red); }
+  .badge.gray { background: var(--border); color: var(--text-faint); }
   .badge .bdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* Uptime row shown alongside the status badge in each service card */
+  .uptime-row { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .uptime-chip {
+    font-size: 11px; color: var(--text-faint);
+    background: var(--bg); border: 1px solid var(--border);
+    padding: 2px 8px; border-radius: 20px; white-space: nowrap;
+  }
+  /* Uptime detail panel inside expanded service card */
+  .uptime-stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .uptime-stat { background: var(--bg); border-radius: var(--radius-sm); padding: 10px 12px; }
+  .uptime-stat b { display: block; font-size: 18px; font-weight: 700; }
+  .uptime-stat span { font-size: 11px; color: var(--text-faint); }
+  .uptime-link { font-size: 12px; color: var(--indigo); text-decoration: none; }
+  .uptime-link:hover { text-decoration: underline; }
 
   /* Service list */
   .svc-card { margin-bottom: 12px; overflow: hidden; }
@@ -353,8 +369,8 @@
             <b>1</b><span>suspended</span>
           </div>
           <div class="card stat-card">
-            <div class="top"><div class="ic indigo"><svg class="icon" viewBox="0 0 24 24" style="width:16px;height:16px;"><path d="M4 4h16v16H4z"/><path d="M8 9h8M8 13h8"/></svg></div></div>
-            <b>47</b><span>log lines today</span>
+            <div class="top"><div class="ic indigo"><svg class="icon" viewBox="0 0 24 24" style="width:16px;height:16px;"><path d="M12 20V10M18 20V4M6 20v-4"/></svg></div></div>
+            <b id="stat-uptime">—</b><span id="stat-uptime-label">avg uptime (30d)</span>
           </div>
         </div>
 
@@ -521,6 +537,7 @@ function renderServices(services) {
           <div class="svc-icon"><svg class="icon" viewBox="0 0 24 24">${icon('running')}</svg></div>
           <div class="svc-title"><b>${svc.name}</b><span>${svc.type || 'Service'}${svc.region ? ' · ' + svc.region : ''}</span></div>
           ${badgeFor(svc.status)}
+          <div class="uptime-row" id="uptime-row-${svc.id}"></div>
           <div class="svc-actions">
             ${svc.status === 'suspended'
               ? `<button class="btn primary" data-action="start">Start</button>`
@@ -532,12 +549,16 @@ function renderServices(services) {
           <div class="tabs">
             <button class="tab active" data-tab="logs">Logs</button>
             <button class="tab" data-tab="env">Environment</button>
+            <button class="tab" data-tab="uptime">Uptime</button>
           </div>
           <div class="tab-panel active" data-view="logs">
             <div style="font-size:12.5px; color:var(--text-faint); padding:8px 0;">Live log streaming isn't wired up yet — view logs on Render directly for now.</div>
           </div>
           <div class="tab-panel" data-view="env">
             <div class="env-loading" style="font-size:12.5px; color:var(--text-faint);">Tap to load…</div>
+          </div>
+          <div class="tab-panel" data-view="uptime" id="uptime-panel-${svc.id}">
+            <div style="font-size:12.5px; color:var(--text-faint);">Loading uptime data…</div>
           </div>
         </div>
       `;
@@ -620,7 +641,108 @@ async function loadEnvInto(container, svc) {
   }
 }
 
-loadServices();
+// ─── UptimeRobot integration ──────────────────────────────────────────────────
+
+let MONITORS = [];  // populated by loadUptime()
+
+function uptimeBadge(monitor) {
+  if (!monitor) return '';
+  const label = monitor.statusLabel;
+  if (label === 'up')          return '<span class="badge green"><span class="bdot"></span>Up</span>';
+  if (label === 'down')        return '<span class="badge red"><span class="bdot"></span>Down</span>';
+  if (label === 'seems_down')  return '<span class="badge amber"><span class="bdot"></span>Seems down</span>';
+  if (label === 'paused')      return '<span class="badge gray"><span class="bdot"></span>Paused</span>';
+  return '<span class="badge gray"><span class="bdot"></span>Unknown</span>';
+}
+
+function msLabel(ms) {
+  if (ms == null) return '—';
+  return ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : ms + 'ms';
+}
+
+function applyUptimeToCard(svc, monitor) {
+  // Header row badge + response time chip
+  const row = document.getElementById('uptime-row-' + svc.id);
+  if (row) {
+    if (monitor) {
+      const rt = msLabel(monitor.responseTime);
+      row.innerHTML = uptimeBadge(monitor) + `<span class="uptime-chip">${rt}</span>`;
+    } else {
+      row.innerHTML = '<span class="uptime-chip">No monitor</span>';
+    }
+  }
+
+  // Uptime detail panel
+  const panel = document.getElementById('uptime-panel-' + svc.id);
+  if (panel) {
+    if (!monitor) {
+      panel.innerHTML = `
+        <div style="font-size:12.5px; color:var(--text-faint); padding:8px 0;">
+          No UptimeRobot monitor matched for this service URL.<br>
+          Add a monitor on <a class="uptime-link" href="https://uptimerobot.com" target="_blank">uptimerobot.com</a> pointing to <b>${svc.url || svc.name}</b>.
+        </div>`;
+    } else {
+      const statusColor = monitor.statusLabel === 'up' ? 'var(--green)' : monitor.statusLabel === 'down' ? 'var(--red)' : 'var(--amber)';
+      const uptime = monitor.uptimeRatio30d != null ? monitor.uptimeRatio30d.toFixed(2) + '%' : '—';
+      const lastChecked = monitor.lastCheckedAt
+        ? new Date(monitor.lastCheckedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '—';
+      panel.innerHTML = `
+        <div class="uptime-stat-grid">
+          <div class="uptime-stat">
+            <b style="color:${statusColor}">${monitor.statusLabel === 'up' ? 'Up' : monitor.statusLabel === 'down' ? 'Down' : monitor.statusLabel === 'seems_down' ? 'Seems down' : 'Paused'}</b>
+            <span>Current status</span>
+          </div>
+          <div class="uptime-stat">
+            <b>${msLabel(monitor.responseTime)}</b>
+            <span>Response time</span>
+          </div>
+          <div class="uptime-stat">
+            <b>${uptime}</b>
+            <span>30-day uptime</span>
+          </div>
+        </div>
+        <div style="font-size:12px; color:var(--text-faint); margin-bottom:8px;">Last checked: ${lastChecked}</div>
+        <a class="uptime-link" href="https://uptimerobot.com/dashboard#${monitor.id}" target="_blank">
+          Open in UptimeRobot →
+        </a>`;
+    }
+  }
+}
+
+async function loadUptime() {
+  try {
+    const r = await fetch('/api/uptime');
+    if (!r.ok) return;   // fail silently — uptime is bonus info
+    const data = await r.json();
+    MONITORS = data.monitors || [];
+
+    // Match monitors to services and update cards
+    SERVICES.forEach(svc => {
+      const svcUrl = (svc.url || '').toLowerCase();
+      const monitor = MONITORS.find(m => {
+        const mUrl = (m.url || '').toLowerCase().replace(/\/$/, '');
+        const sUrl = svcUrl.replace(/\/$/, '');
+        return sUrl && mUrl && (mUrl.includes(sUrl) || sUrl.includes(mUrl));
+      }) || null;
+      applyUptimeToCard(svc, monitor);
+    });
+
+    // Update overview avg uptime stat
+    const monitored = MONITORS.filter(m => m.uptimeRatio30d != null);
+    if (monitored.length > 0) {
+      const avg = monitored.reduce((s, m) => s + m.uptimeRatio30d, 0) / monitored.length;
+      const statEl = document.getElementById('stat-uptime');
+      if (statEl) statEl.textContent = avg.toFixed(1) + '%';
+    }
+  } catch (_) {
+    // UptimeRobot key not configured — silently skip
+  }
+}
+
+// Run both on load; loadUptime waits briefly for services to render first
+loadServices().then(() => loadUptime());
+
 
 // Sidebar nav
 document.querySelectorAll('.nav-item').forEach(item => {
