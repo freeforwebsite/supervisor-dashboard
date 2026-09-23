@@ -69,8 +69,9 @@ export default async function handler(req, res) {
 
     const merged = results.flatMap((r) => r.services);
     const errors = results.filter((r) => r.error).map((r) => ({ account: r.account, error: r.error }));
+    const activeAccounts = accounts.map(a => ({ index: a.index, name: a.name }));
 
-    return res.status(200).json({ services: merged, errors, accountCount: accounts.length });
+    return res.status(200).json({ services: merged, errors, accounts: activeAccounts });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Failed to fetch services' });
   }

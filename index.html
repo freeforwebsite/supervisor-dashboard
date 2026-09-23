@@ -392,6 +392,10 @@
       <div class="page" id="page-services">
         <div class="topline">
           <div><h2>Services</h2><p>Everything deployed under your Render account.</p></div>
+          <button class="btn primary" id="btn-open-create-svc">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            New service
+          </button>
         </div>
         <div id="svc-list"></div>
       </div>
@@ -484,6 +488,52 @@
   </div>
 </div>
 
+<!-- Create Service Modal -->
+<div id="create-service-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center; padding: 20px;">
+  <div class="card" style="width: 100%; max-width: 450px; padding: 24px; max-height: 90vh; overflow-y: auto;">
+    <h3 style="margin: 0 0 16px 0;">Deploy New Service</h3>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div>
+        <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Target Account</div>
+        <select id="new-svc-account" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);"></select>
+      </div>
+      <div>
+        <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Service Name</div>
+        <input type="text" id="new-svc-name" placeholder="my-telegram-bot" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+      </div>
+      <div>
+        <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">GitHub Repository URL</div>
+        <input type="url" id="new-svc-repo" placeholder="https://github.com/user/repo" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+      </div>
+      <div>
+        <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Branch</div>
+        <input type="text" id="new-svc-branch" value="main" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+      </div>
+      <div>
+        <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Environment</div>
+        <select id="new-svc-env" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+          <option value="node">Node.js</option>
+          <option value="docker">Docker</option>
+        </select>
+      </div>
+      <div id="new-svc-node-fields" style="display:flex; flex-direction:column; gap:12px;">
+        <div>
+          <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Build Command</div>
+          <input type="text" id="new-svc-build" value="npm install" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+        </div>
+        <div>
+          <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Start Command</div>
+          <input type="text" id="new-svc-start" value="npm start" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+        </div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn" id="btn-close-svc-modal" style="flex:1; justify-content:center;">Cancel</button>
+        <button class="btn primary" id="btn-submit-svc" style="flex:1; justify-content:center;">Deploy Service</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const svcList = document.getElementById('svc-list');
 const envList = document.getElementById('env-list');
@@ -522,6 +572,7 @@ function showMessage(container, title, body) {
 }
 
 let SERVICES = [];
+let ACCOUNTS = [];
 
 async function loadServices() {
   svcList.innerHTML = '<div class="card" style="padding:24px; text-align:center; color:var(--text-dim); font-size:13px;">Loading services…</div>';
@@ -538,7 +589,8 @@ async function loadServices() {
       updateCounts([]);
       return;
     }
-
+    
+    ACCOUNTS = data.accounts || [];
     SERVICES = data.services;
     renderServices(SERVICES);
     updateCounts(SERVICES);
@@ -823,7 +875,69 @@ function renderMonitors() {
   }).join('');
 }
 
-// Modal Logic
+// Create Service Modal Logic
+document.getElementById('btn-open-create-svc').addEventListener('click', () => {
+  const select = document.getElementById('new-svc-account');
+  select.innerHTML = '';
+  if (ACCOUNTS.length === 0) {
+    select.innerHTML = '<option value="">No configured accounts found</option>';
+  } else {
+    ACCOUNTS.forEach(acc => {
+      const opt = document.createElement('option');
+      opt.value = acc.index;
+      opt.textContent = acc.name;
+      select.appendChild(opt);
+    });
+  }
+  document.getElementById('create-service-modal').style.display = 'flex';
+});
+
+document.getElementById('btn-close-svc-modal').addEventListener('click', () => {
+  document.getElementById('create-service-modal').style.display = 'none';
+});
+
+document.getElementById('new-svc-env').addEventListener('change', (e) => {
+  document.getElementById('new-svc-node-fields').style.display = e.target.value === 'node' ? 'flex' : 'none';
+});
+
+document.getElementById('btn-submit-svc').addEventListener('click', async () => {
+  const account = document.getElementById('new-svc-account').value;
+  const name = document.getElementById('new-svc-name').value.trim();
+  const repo = document.getElementById('new-svc-repo').value.trim();
+  const branch = document.getElementById('new-svc-branch').value.trim();
+  const envType = document.getElementById('new-svc-env').value;
+  const buildCommand = document.getElementById('new-svc-build').value.trim();
+  const startCommand = document.getElementById('new-svc-start').value.trim();
+  const btn = document.getElementById('btn-submit-svc');
+
+  if (!account || !name || !repo) return alert('Target Account, Name, and Repository URL are required.');
+
+  btn.disabled = true;
+  btn.textContent = 'Deploying...';
+  try {
+    const r = await fetch('/api/create-service', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getCustomHeaders() },
+      body: JSON.stringify({ account, name, repo, branch, envType, buildCommand, startCommand })
+    });
+    const result = await r.json();
+    if (!r.ok) throw new Error(result.error || 'Failed to create service');
+    
+    document.getElementById('create-service-modal').style.display = 'none';
+    document.getElementById('new-svc-name').value = '';
+    document.getElementById('new-svc-repo').value = '';
+    btn.disabled = false;
+    btn.textContent = 'Deploy Service';
+    alert('Service deployment initiated successfully!');
+    loadServices();
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Deploy Service';
+  }
+});
+
+// Monitor Modal Logic
 document.getElementById('btn-open-monitor-modal').addEventListener('click', () => {
   document.getElementById('monitor-modal').style.display = 'flex';
 });
