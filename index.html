@@ -667,6 +667,7 @@ function renderServices(services) {
               ? `<button class="btn primary" data-action="start">Start</button>`
               : `<button class="btn" data-action="suspend">Suspend</button>`}
             <button class="btn" data-action="deploy">Deploy</button>
+            <button class="btn" style="color:var(--red); border-color:var(--red);" data-action="delete-service">Delete</button>
           </div>
           <svg class="icon chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
         </div>
@@ -703,12 +704,19 @@ function renderServices(services) {
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const action = btn.dataset.action;
+          
+          if (action === 'delete-service') {
+            if (!confirm(`Are you absolutely sure you want to permanently delete "${svc.name}"?\nThis action cannot be undone.`)) {
+              return;
+            }
+          }
+
           btn.disabled = true;
           const ogText = btn.textContent;
-          btn.textContent = action === 'start' ? 'Starting…' : action === 'deploy' ? 'Deploying…' : 'Suspending…';
+          btn.textContent = action === 'start' ? 'Starting…' : action === 'deploy' ? 'Deploying…' : action === 'delete-service' ? 'Deleting…' : 'Suspending…';
           try {
             const r = await fetch(`/api/${action}`, {
-              method: 'POST',
+              method: action === 'delete-service' ? 'DELETE' : 'POST',
               headers: { 'Content-Type': 'application/json', ...getCustomHeaders() },
               body: JSON.stringify({ serviceId: svc.id, account: svc.account }),
             });
