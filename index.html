@@ -393,6 +393,11 @@
         <div class="topline">
           <div><h2>Services</h2><p>Everything deployed under your Render account.</p></div>
           <div style="display:flex; gap:8px; align-items:center;">
+            <select id="svc-sort" style="font-size:13px; padding:7px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text);">
+              <option value="account">Group by Account</option>
+              <option value="status">Group by Status</option>
+              <option value="alpha">Alphabetical (A-Z)</option>
+            </select>
             <input type="text" id="svc-search" placeholder="Search services..." style="font-size:13px; padding:7px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); width:200px;">
             <button class="btn primary" id="btn-open-create-svc">
               <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
@@ -597,14 +602,17 @@ function showMessage(container, title, body) {
 let SERVICES = [];
 let ACCOUNTS = [];
 
-document.getElementById('svc-search').addEventListener('input', (e) => {
-  const q = e.target.value.toLowerCase();
+function applySearchAndSort() {
+  const q = (document.getElementById('svc-search').value || '').toLowerCase();
   const filtered = SERVICES.filter(s => 
     s.name.toLowerCase().includes(q) || 
     (s.accountName && s.accountName.toLowerCase().includes(q))
   );
   renderServices(filtered);
-});
+}
+
+document.getElementById('svc-search').addEventListener('input', applySearchAndSort);
+document.getElementById('svc-sort').addEventListener('change', applySearchAndSort);
 
 async function loadServices() {
   svcList.innerHTML = '<div class="card" style="padding:24px; text-align:center; color:var(--text-dim); font-size:13px;">Loading services…</div>';
@@ -652,30 +660,55 @@ function updateCounts(services) {
   if (statCards[1]) statCards[1].textContent = suspended;
 }
 
-function renderServices(services) {
+function renderServices(servicesToRender) {
   svcList.innerHTML = '';
   envList.innerHTML = '';
   combinedLogs.innerHTML = '';
 
-  const byAccount = {};
-  services.forEach(s => {
-    (byAccount[s.accountName] = byAccount[s.accountName] || []).push(s);
-  });
+  const sortMode = document.getElementById('svc-sort') ? document.getElementById('svc-sort').value : 'account';
+  let sorted = [...servicesToRender].sort((a, b) => a.name.localeCompare(b.name));
+  
+  let groups = [];
+  
+  if (sortMode === 'account') {
+    const accMap = {};
+    sorted.forEach(s => {
+      accMap[s.accountName] = accMap[s.accountName] || { active: [], suspended: [] };
+      if (s.status === 'suspended') accMap[s.accountName].suspended.push(s);
+      else accMap[s.accountName].active.push(s);
+    });
+    Object.keys(accMap).sort().forEach(acc => {
+      if (accMap[acc].active.length > 0) groups.push({ label: `${acc} (Active)`, items: accMap[acc].active });
+      if (accMap[acc].suspended.length > 0) groups.push({ label: `${acc} (Suspended)`, items: accMap[acc].suspended });
+    });
+  } else if (sortMode === 'status') {
+    const active = sorted.filter(s => s.status !== 'suspended');
+    const suspended = sorted.filter(s => s.status === 'suspended');
+    if (active.length > 0) groups.push({ label: 'Running Services', items: active });
+    if (suspended.length > 0) groups.push({ label: 'Suspended Services', items: suspended });
+  } else if (sortMode === 'alpha') {
+    groups.push({ label: 'All Services (A-Z)', items: sorted });
+  }
 
-  Object.entries(byAccount).forEach(([accountName, list]) => {
+  groups.forEach(g => {
     const label = document.createElement('div');
     label.className = 'sb-section-label';
-    label.style.cssText = 'padding:0; margin:18px 0 8px;';
-    label.textContent = accountName;
+    label.style.cssText = 'padding:0; margin:18px 0 8px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; font-size: 11.5px; letter-spacing: 0.5px;';
+    label.textContent = g.label;
     svcList.appendChild(label);
 
-    list.forEach(svc => {
+    g.items.forEach(svc => {
       const el = document.createElement('div');
       el.className = 'card svc-card';
+      
+      const subtitle = sortMode === 'account' 
+        ? `${svc.type || 'Service'}${svc.region ? ' · ' + svc.region : ''}`
+        : `${svc.type || 'Service'} · ${svc.accountName}${svc.region ? ' · ' + svc.region : ''}`;
+
       el.innerHTML = `
         <div class="svc-head" data-toggle>
           <div class="svc-icon"><svg class="icon" viewBox="0 0 24 24">${icon('running')}</svg></div>
-          <div class="svc-title"><b>${svc.name}</b><span>${svc.type || 'Service'}${svc.region ? ' · ' + svc.region : ''}</span></div>
+          <div class="svc-title"><b>${svc.name}</b><span>${subtitle}</span></div>
           ${badgeFor(svc.status)}
           <div class="uptime-row" id="uptime-row-${svc.id}"></div>
           <div class="svc-actions">
