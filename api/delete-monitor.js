@@ -25,7 +25,13 @@ export default async function handler(req, res) {
         body: body.toString(),
       });
       const data = await r.json();
-      if (data.stat !== 'ok') throw new Error(data.error?.message || 'UptimeRobot API error');
+      if (data.stat !== 'ok') {
+        let msg = data.error?.message || 'UptimeRobot API error';
+        if (msg.toLowerCase().includes('not allowed to perform')) {
+          msg = 'UptimeRobot blocked this. You are likely using a Read-Only API Key. Please provide a Main API Key to delete monitors.';
+        }
+        throw new Error(msg);
+      }
     } else if (source === 'updown') {
       const r = await fetch(`https://updown.io/api/checks/${encodeURIComponent(monitorId)}?api-key=${encodeURIComponent(apiKey)}`, {
         method: 'DELETE',

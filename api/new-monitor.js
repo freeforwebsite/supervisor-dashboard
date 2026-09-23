@@ -55,7 +55,11 @@ export default async function handler(req, res) {
 
     const data = await r.json();
     if (data.stat !== 'ok') {
-      return res.status(400).json({ error: data.error?.message || 'Failed to create monitor in UptimeRobot' });
+      let errMsg = data.error?.message || 'Failed to create monitor in UptimeRobot';
+      if (errMsg.toLowerCase().includes('not allowed to perform')) {
+        errMsg = 'UptimeRobot blocked this. You are likely using a Read-Only API Key. Please provide a Main API Key in Settings to create monitors.';
+      }
+      return res.status(400).json({ error: errMsg });
     }
 
     return res.status(200).json({ success: true, monitor: data.monitor });
