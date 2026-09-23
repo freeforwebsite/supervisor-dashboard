@@ -13,26 +13,30 @@ export default async function handler(req, res) {
   }
 
   // Collect all configured UptimeRobot API keys
-  const keys = [];
+  const accounts = [];
 
   // Support a plain UPTIMEROBOT_API_KEY (single account shorthand)
   if (process.env.UPTIMEROBOT_API_KEY) {
-    keys.push(process.env.UPTIMEROBOT_API_KEY);
+    accounts.push({ id: 'UPTIMEROBOT_API_KEY', key: process.env.UPTIMEROBOT_API_KEY });
   }
 
   // Support UPTIMEROBOT_API_KEY_1 .. _20 (multi-account)
   for (let i = 1; i <= 20; i++) {
     const k = process.env[`UPTIMEROBOT_API_KEY_${i}`];
-    if (k && !keys.includes(k)) keys.push(k);
+    if (k && !accounts.find(a => a.key === k)) {
+      accounts.push({ id: `UPTIMEROBOT_API_KEY_${i}`, key: k });
+    }
   }
 
   const customKeysHeader = req.headers['x-custom-uptimerobot'] || '';
   const customKeys = customKeysHeader.split(',').map(k => k.trim()).filter(Boolean);
-  customKeys.forEach(k => {
-    if (!keys.includes(k)) keys.push(k);
+  customKeys.forEach((k, idx) => {
+    if (!accounts.find(a => a.key === k)) {
+      accounts.push({ id: `custom-${idx}`, key: k });
+    }
   });
 
-  if (keys.length === 0) {
+  if (accounts.length === 0) {
     return res.status(500).json({
       error: 'No UPTIMEROBOT_API_KEY (or UPTIMEROBOT_API_KEY_1..10) environment variables are set',
     });
@@ -40,10 +44,10 @@ export default async function handler(req, res) {
 
   try {
     const results = await Promise.all(
-      keys.map(async (apiKey) => {
+      accounts.map(async (acc) => {
         // UptimeRobot v2 API — POST with form body
         const body = new URLSearchParams({
-          api_key: apiKey,
+          api_key: acc.key,
           format: 'json',
           response_times: '1',         // include response time
           response_times_limit: '1',   // only latest response time
@@ -67,7 +71,6 @@ export default async function handler(req, res) {
           id: m.id,
           name: m.friendly_name,
           url: m.url,
-          // status: 0=paused, 1=not checked yet, 2=up, 8=seems down, 9=down
           status: m.status,
           statusLabel:
             m.status === 2 ? 'up'
@@ -75,12 +78,11 @@ export default async function handler(req, res) {
             : m.status === 8 ? 'seems_down'
             : m.status === 0 ? 'paused'
             : 'unknown',
-          // latest response time in ms (from response_times array)
           responseTime: m.response_times?.[0]?.value ?? null,
-          // 30-day uptime ratio (string like "99.800")
           uptimeRatio30d: m.custom_uptime_ratio ? parseFloat(m.custom_uptime_ratio) : null,
-          // last check timestamp (unix)
           lastCheckedAt: m.last_check_time ? new Date(m.last_check_time * 1000).toISOString() : null,
+          source: 'uptimerobot',
+          account: acc.id
         }));
 
         return { monitors };

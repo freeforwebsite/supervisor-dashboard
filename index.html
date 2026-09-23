@@ -416,10 +416,16 @@
       <div class="page" id="page-monitors">
         <div class="topline">
           <div><h2>Monitors</h2><p>All UptimeRobot and updown.io checks.</p></div>
-          <button class="btn primary" id="btn-open-monitor-modal">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-            Add monitor
-          </button>
+          <div style="display:flex; gap:8px;">
+            <button class="btn" id="btn-open-bulk-delete-monitor" style="color:var(--red); border-color:var(--red);">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+              Bulk delete
+            </button>
+            <button class="btn primary" id="btn-open-monitor-modal">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              Add monitor
+            </button>
+          </div>
         </div>
         <div id="monitor-list"></div>
       </div>
@@ -575,6 +581,23 @@
     <div style="display:flex; gap:8px; margin-top: auto;">
       <button class="btn" id="btn-close-bulk-modal" style="flex:1; justify-content:center;">Cancel</button>
       <button class="btn" id="btn-confirm-bulk-delete" style="flex:1; justify-content:center; background:var(--red); color:white; border-color:var(--red);" disabled>Delete Selected (0)</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Delete Monitor Modal -->
+<div id="bulk-delete-monitor-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center; padding: 20px;">
+  <div class="card" style="width: 100%; max-width: 500px; padding: 24px; max-height: 85vh; display: flex; flex-direction: column;">
+    <h3 style="margin: 0 0 12px 0; color: var(--red);">Bulk Delete Monitors</h3>
+    <p style="font-size:13px; margin:0 0 16px 0; color:var(--text-faint);">Select the UptimeRobot/updown checks you want to permanently delete. This action cannot be undone.</p>
+    
+    <div id="bulk-delete-monitor-list" style="overflow-y:auto; border:1px solid var(--border); border-radius:6px; margin-bottom:16px; flex:1;">
+      <!-- Populated via JS -->
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top: auto;">
+      <button class="btn" id="btn-close-bulk-monitor-modal" style="flex:1; justify-content:center;">Cancel</button>
+      <button class="btn" id="btn-confirm-bulk-delete-monitor" style="flex:1; justify-content:center; background:var(--red); color:white; border-color:var(--red);" disabled>Delete Selected (0)</button>
     </div>
   </div>
 </div>
@@ -1088,6 +1111,102 @@ function renderMonitors() {
     `;
   }).join('');
 }
+
+const bulkDeleteMonitorModal = document.getElementById('bulk-delete-monitor-modal');
+const bulkDeleteMonitorList = document.getElementById('bulk-delete-monitor-list');
+const btnConfirmBulkMonitor = document.getElementById('btn-confirm-bulk-delete-monitor');
+
+document.getElementById('btn-open-bulk-delete-monitor').addEventListener('click', () => {
+  bulkDeleteMonitorList.innerHTML = '';
+  const sorted = [...MONITORS].sort((a, b) => a.name.localeCompare(b.name));
+  
+  sorted.forEach(m => {
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex; align-items:center; gap:12px; padding:10px; border-bottom:1px solid var(--border); cursor:pointer; font-size:13px; margin:0;';
+    const badgeClass = m.statusLabel === 'up' ? 'green' : m.statusLabel === 'down' ? 'red' : m.statusLabel === 'seems_down' ? 'amber' : 'gray';
+    const statusText = m.statusLabel === 'up' ? 'Up' : m.statusLabel === 'down' ? 'Down' : m.statusLabel === 'seems_down' ? 'Seems down' : 'Paused';
+    
+    row.innerHTML = `
+      <input type="checkbox" value="${m.id}" data-account="${m.account}" data-source="${m.source}" class="bulk-cb-monitor" style="width:16px; height:16px; cursor:pointer;">
+      <div style="flex:1; display:flex; align-items:center; gap:8px;">
+        <div style="font-weight:600;">${m.name}</div>
+        <div style="font-size:11.5px; color:var(--text-faint);">${m.source === 'updown' ? 'updown.io' : 'UptimeRobot'}</div>
+      </div>
+      <span class="badge ${badgeClass}"><span class="bdot"></span>${statusText}</span>
+    `;
+    bulkDeleteMonitorList.appendChild(row);
+  });
+
+  if (sorted.length === 0) {
+    bulkDeleteMonitorList.innerHTML = '<div style="padding:12px; text-align:center; color:var(--text-dim); font-size:13px;">No monitors available.</div>';
+  }
+
+  updateBulkMonitorCount();
+  bulkDeleteMonitorModal.style.display = 'flex';
+  
+  document.querySelectorAll('.bulk-cb-monitor').forEach(cb => {
+    cb.addEventListener('change', updateBulkMonitorCount);
+  });
+});
+
+function updateBulkMonitorCount() {
+  const checked = document.querySelectorAll('.bulk-cb-monitor:checked').length;
+  btnConfirmBulkMonitor.textContent = `Delete Selected (${checked})`;
+  btnConfirmBulkMonitor.disabled = checked === 0;
+}
+
+document.getElementById('btn-close-bulk-monitor-modal').addEventListener('click', () => {
+  bulkDeleteMonitorModal.style.display = 'none';
+});
+
+btnConfirmBulkMonitor.addEventListener('click', async () => {
+  const selected = Array.from(document.querySelectorAll('.bulk-cb-monitor:checked')).map(cb => ({
+    id: cb.value,
+    account: cb.dataset.account,
+    source: cb.dataset.source
+  }));
+  
+  if (selected.length === 0) return;
+  
+  let msg = `Are you absolutely sure you want to permanently delete <strong>these ${selected.length} monitors</strong>?`;
+  msg += `<br><br>This action cannot be undone.`;
+
+  document.getElementById('delete-modal-msg').innerHTML = msg;
+  document.getElementById('delete-modal').style.display = 'flex';
+
+  document.getElementById('btn-cancel-delete').onclick = () => {
+    document.getElementById('delete-modal').style.display = 'none';
+  };
+
+  document.getElementById('btn-confirm-delete').onclick = async () => {
+    document.getElementById('delete-modal').style.display = 'none';
+    btnConfirmBulkMonitor.disabled = true;
+    
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < selected.length; i++) {
+      btnConfirmBulkMonitor.textContent = `Deleting ${i + 1} of ${selected.length}…`;
+      try {
+        const r = await fetch('/api/delete-monitor', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', ...getCustomHeaders() },
+          body: JSON.stringify({ monitorId: selected[i].id, account: selected[i].account, source: selected[i].source }),
+        });
+        if (r.ok) successCount++;
+        else failCount++;
+      } catch (err) {
+        failCount++;
+      }
+    }
+
+    bulkDeleteMonitorModal.style.display = 'none';
+    if (failCount > 0) {
+      alert(`Bulk delete completed.\n${successCount} succeeded\n${failCount} failed`);
+    }
+    loadUptime();
+  };
+});
 
 // Create Service Modal Logic
 document.getElementById('btn-open-create-svc').addEventListener('click', () => {
