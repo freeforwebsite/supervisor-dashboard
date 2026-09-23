@@ -643,7 +643,8 @@ async function loadServices() {
       svcList.parentElement.insertBefore(warn, svcList);
     }
   } catch (err) {
-    showMessage(svcList, 'Network error', 'Could not reach /api/services. Make sure the functions deployed correctly.');
+    console.error('loadServices error:', err);
+    showMessage(svcList, 'Execution error', err.message || 'Could not reach /api/services. Make sure the functions deployed correctly.');
   }
 }
 
@@ -829,7 +830,7 @@ function renderServices(servicesToRender) {
     const envGroup = document.createElement('div');
     envGroup.className = 'card';
     envGroup.style.cssText = 'margin-bottom:12px; padding:16px 18px;';
-    envGroup.innerHTML = `<div style="font-weight:600; font-size:13.5px; margin-bottom:8px;">${accountName}</div><div style="font-size:12px; color:var(--text-faint);">Expand a service under Services and open its Environment tab to view/add variables.</div>`;
+    envGroup.innerHTML = `<div style="font-weight:600; font-size:13.5px; margin-bottom:8px;">${g.label}</div><div style="font-size:12px; color:var(--text-faint);">Expand a service under Services and open its Environment tab to view/add variables.</div>`;
     envList.appendChild(envGroup);
   });
 
