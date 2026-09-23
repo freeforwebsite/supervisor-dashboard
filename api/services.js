@@ -21,8 +21,19 @@ export default async function handler(req, res) {
     }
   }
 
+  const customKeysHeader = req.headers['x-custom-render'] || '';
+  const customKeys = customKeysHeader.split(',').map(k => k.trim()).filter(Boolean);
+  
+  customKeys.forEach((key, idx) => {
+    accounts.push({
+      index: `custom-${idx}`,
+      key,
+      name: `Local Account ${idx + 1}`,
+    });
+  });
+
   if (accounts.length === 0) {
-    return res.status(500).json({ error: 'No RENDER_API_KEY_1..10 environment variables are set' });
+    return res.status(500).json({ error: 'No RENDER_API_KEY_1..10 environment variables are set, and no custom keys provided.' });
   }
 
   try {

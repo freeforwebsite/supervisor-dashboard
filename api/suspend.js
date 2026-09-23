@@ -15,7 +15,16 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'account (1-10) is required' });
   }
 
-  const key = process.env[`RENDER_API_KEY_${account}`];
+  let key = null;
+  if (String(account).startsWith('custom-')) {
+    const idx = parseInt(String(account).replace('custom-', ''), 10);
+    const customKeysHeader = req.headers['x-custom-render'] || '';
+    const customKeys = customKeysHeader.split(',').map(k => k.trim()).filter(Boolean);
+    key = customKeys[idx];
+  } else {
+    key = process.env[`RENDER_API_KEY_${account}`];
+  }
+
   if (!key) {
     return res.status(400).json({ error: `No API key configured for account ${account}` });
   }

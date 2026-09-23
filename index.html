@@ -425,12 +425,25 @@
           </div>
         </div>
 
-        <div class="topline" style="margin-top:26px;"><h2>Other vendors</h2></div>
-        <div class="card empty">
-          <div class="ic"><svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></div>
-          <h3>Only Render is connected</h3>
-          <p>Add another vendor — Railway, Replit, or a custom API — once you're ready to bring more accounts into one view.</p>
-          <button class="btn primary" style="margin: 0 auto;">Connect a vendor</button>
+        <div class="topline" style="margin-top:26px;">
+          <div><h2>Local Accounts (Browser Only)</h2><p>Instantly add accounts via API keys. Saved locally in this browser.</p></div>
+        </div>
+        <div class="card">
+          <div class="settings-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
+            <div class="label"><b>Render API Keys (comma-separated)</b></div>
+            <input type="text" id="local-render-keys" placeholder="rnd_xxxx..." style="font-size: 13px; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+          </div>
+          <div class="settings-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
+            <div class="label"><b>UptimeRobot API Keys (comma-separated)</b></div>
+            <input type="text" id="local-ur-keys" placeholder="urxxxx..." style="font-size: 13px; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+          </div>
+          <div class="settings-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
+            <div class="label"><b>updown.io API Keys (comma-separated)</b></div>
+            <input type="text" id="local-ud-keys" placeholder="ro-xxxx..." style="font-size: 13px; padding: 8px 12px; border-radius: 9px; border: 1px solid var(--border); background: var(--bg); color: var(--text);">
+          </div>
+          <div class="settings-row">
+            <button class="btn primary" id="save-local-keys" style="width: 100%; justify-content: center;">Save Local Keys & Reload</button>
+          </div>
         </div>
       </div>
     </main>
@@ -441,6 +454,15 @@
 const svcList = document.getElementById('svc-list');
 const envList = document.getElementById('env-list');
 const combinedLogs = document.getElementById('combined-logs');
+
+function getCustomHeaders() {
+  return {
+    'x-custom-render': localStorage.getItem('custom_render') || '',
+    'x-custom-uptimerobot': localStorage.getItem('custom_ur') || '',
+    'x-custom-updown': localStorage.getItem('custom_ud') || ''
+  };
+}
+
 
 function icon(name) {
   const paths = {
@@ -470,7 +492,7 @@ let SERVICES = [];
 async function loadServices() {
   svcList.innerHTML = '<div class="card" style="padding:24px; text-align:center; color:var(--text-dim); font-size:13px;">Loading services…</div>';
   try {
-    const r = await fetch('/api/services');
+    const r = await fetch('/api/services', { headers: getCustomHeaders() });
     const data = await r.json();
 
     if (!r.ok) {
@@ -582,7 +604,7 @@ function renderServices(services) {
         try {
           const r = await fetch(`/api/${action}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', ...getCustomHeaders() },
             body: JSON.stringify({ serviceId: svc.id, account: svc.account }),
           });
           const result = await r.json();
@@ -626,7 +648,7 @@ function renderServices(services) {
 async function loadEnvInto(container, svc) {
   container.innerHTML = '<div style="font-size:12px; color:var(--text-faint);">Loading…</div>';
   try {
-    const r = await fetch(`/api/env?serviceId=${encodeURIComponent(svc.id)}&account=${svc.account}`);
+    const r = await fetch(`/api/env?serviceId=${encodeURIComponent(svc.id)}&account=${svc.account}`, { headers: getCustomHeaders() });
     const data = await r.json();
     if (!r.ok) {
       container.innerHTML = `<div style="font-size:12px; color:var(--red);">${data.error || 'Failed to load'}</div>`;
@@ -641,7 +663,7 @@ async function loadEnvInto(container, svc) {
   }
 }
 
-// ─── UptimeRobot integration ──────────────────────────────────────────────────
+// ─── UptimeRobot + updown.io integration ─────────────────────────────────────
 
 let MONITORS = [];  // populated by loadUptime()
 
@@ -678,8 +700,10 @@ function applyUptimeToCard(svc, monitor) {
     if (!monitor) {
       panel.innerHTML = `
         <div style="font-size:12.5px; color:var(--text-faint); padding:8px 0;">
-          No UptimeRobot monitor matched for this service URL.<br>
-          Add a monitor on <a class="uptime-link" href="https://uptimerobot.com" target="_blank">uptimerobot.com</a> pointing to <b>${svc.url || svc.name}</b>.
+          No monitor matched for this service URL.<br>
+          Add it on <a class="uptime-link" href="https://uptimerobot.com" target="_blank">UptimeRobot</a>
+          or <a class="uptime-link" href="https://updown.io" target="_blank">updown.io</a>
+          pointing to <b>${svc.url || svc.name}</b>.
         </div>`;
     } else {
       const statusColor = monitor.statusLabel === 'up' ? 'var(--green)' : monitor.statusLabel === 'down' ? 'var(--red)' : 'var(--amber)';
@@ -687,10 +711,15 @@ function applyUptimeToCard(svc, monitor) {
       const lastChecked = monitor.lastCheckedAt
         ? new Date(monitor.lastCheckedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : '—';
+      const statusText = monitor.statusLabel === 'up' ? 'Up' : monitor.statusLabel === 'down' ? 'Down' : monitor.statusLabel === 'seems_down' ? 'Seems down' : 'Paused';
+      const sourceLabel = monitor.source === 'updown' ? 'updown.io' : 'UptimeRobot';
+      const monitorLink = monitor.source === 'updown'
+        ? `<a class="uptime-link" href="https://updown.io/checks/${monitor.token}" target="_blank">Open in updown.io →</a>`
+        : `<a class="uptime-link" href="https://uptimerobot.com/dashboard#${monitor.id}" target="_blank">Open in UptimeRobot →</a>`;
       panel.innerHTML = `
         <div class="uptime-stat-grid">
           <div class="uptime-stat">
-            <b style="color:${statusColor}">${monitor.statusLabel === 'up' ? 'Up' : monitor.statusLabel === 'down' ? 'Down' : monitor.statusLabel === 'seems_down' ? 'Seems down' : 'Paused'}</b>
+            <b style="color:${statusColor}">${statusText}</b>
             <span>Current status</span>
           </div>
           <div class="uptime-stat">
@@ -702,33 +731,48 @@ function applyUptimeToCard(svc, monitor) {
             <span>30-day uptime</span>
           </div>
         </div>
-        <div style="font-size:12px; color:var(--text-faint); margin-bottom:8px;">Last checked: ${lastChecked}</div>
-        <a class="uptime-link" href="https://uptimerobot.com/dashboard#${monitor.id}" target="_blank">
-          Open in UptimeRobot →
-        </a>`;
+        <div style="font-size:12px; color:var(--text-faint); margin-bottom:8px;">Last checked: ${lastChecked} · via ${sourceLabel}</div>
+        ${monitorLink}`;
     }
   }
 }
 
+function findMonitor(svc) {
+  const sUrl = (svc.url || '').toLowerCase().replace(/\/$/, '');
+  if (!sUrl) return null;
+  return MONITORS.find(m => {
+    const mUrl = (m.url || '').toLowerCase().replace(/\/$/, '');
+    return mUrl && (mUrl.includes(sUrl) || sUrl.includes(mUrl));
+  }) || null;
+}
+
 async function loadUptime() {
   try {
-    const r = await fetch('/api/uptime');
-    if (!r.ok) return;   // fail silently — uptime is bonus info
-    const data = await r.json();
-    MONITORS = data.monitors || [];
+    // Fetch UptimeRobot and updown.io concurrently — both are optional, fail silently
+    const [urRes, udRes] = await Promise.allSettled([
+      fetch('/api/uptime', { headers: getCustomHeaders() }),
+      fetch('/api/updown', { headers: getCustomHeaders() }),
+    ]);
 
-    // Match monitors to services and update cards
-    SERVICES.forEach(svc => {
-      const svcUrl = (svc.url || '').toLowerCase();
-      const monitor = MONITORS.find(m => {
-        const mUrl = (m.url || '').toLowerCase().replace(/\/$/, '');
-        const sUrl = svcUrl.replace(/\/$/, '');
-        return sUrl && mUrl && (mUrl.includes(sUrl) || sUrl.includes(mUrl));
-      }) || null;
-      applyUptimeToCard(svc, monitor);
-    });
+    const allMonitors = [];
 
-    // Update overview avg uptime stat
+    if (urRes.status === 'fulfilled' && urRes.value.ok) {
+      const data = await urRes.value.json();
+      (data.monitors || []).forEach(m => allMonitors.push({ ...m, source: 'uptimerobot' }));
+    }
+
+    if (udRes.status === 'fulfilled' && udRes.value.ok) {
+      const data = await udRes.value.json();
+      // updown.io checks already carry source: 'updown' from api/updown.js
+      (data.checks || []).forEach(c => allMonitors.push(c));
+    }
+
+    MONITORS = allMonitors;
+
+    // Match every Render service to its monitor and update cards
+    SERVICES.forEach(svc => applyUptimeToCard(svc, findMonitor(svc)));
+
+    // Update overview avg uptime stat (across all monitors from both services)
     const monitored = MONITORS.filter(m => m.uptimeRatio30d != null);
     if (monitored.length > 0) {
       const avg = monitored.reduce((s, m) => s + m.uptimeRatio30d, 0) / monitored.length;
@@ -736,11 +780,11 @@ async function loadUptime() {
       if (statEl) statEl.textContent = avg.toFixed(1) + '%';
     }
   } catch (_) {
-    // UptimeRobot key not configured — silently skip
+    // Neither uptime service configured — silently skip
   }
 }
 
-// Run both on load; loadUptime waits briefly for services to render first
+// Run both on load; loadUptime waits for services to render first
 loadServices().then(() => loadUptime());
 
 
@@ -766,6 +810,25 @@ scrim.addEventListener('click', closeDrawer);
 function closeDrawer() {
   sidebar.classList.remove('open');
   scrim.classList.remove('show');
+}
+// Local Accounts Logic
+const elRender = document.getElementById('local-render-keys');
+const elUr = document.getElementById('local-ur-keys');
+const elUd = document.getElementById('local-ud-keys');
+
+if (elRender) elRender.value = localStorage.getItem('custom_render') || '';
+if (elUr) elUr.value = localStorage.getItem('custom_ur') || '';
+if (elUd) elUd.value = localStorage.getItem('custom_ud') || '';
+
+const btnSave = document.getElementById('save-local-keys');
+if (btnSave) {
+  btnSave.addEventListener('click', () => {
+    localStorage.setItem('custom_render', elRender.value);
+    localStorage.setItem('custom_ur', elUr.value);
+    localStorage.setItem('custom_ud', elUd.value);
+    btnSave.textContent = 'Saved! Reloading...';
+    setTimeout(() => window.location.reload(), 600);
+  });
 }
 </script>
 

@@ -26,6 +26,12 @@ export default async function handler(req, res) {
     if (k && !keys.includes(k)) keys.push(k);
   }
 
+  const customKeysHeader = req.headers['x-custom-uptimerobot'] || '';
+  const customKeys = customKeysHeader.split(',').map(k => k.trim()).filter(Boolean);
+  customKeys.forEach(k => {
+    if (!keys.includes(k)) keys.push(k);
+  });
+
   if (keys.length === 0) {
     return res.status(500).json({
       error: 'No UPTIMEROBOT_API_KEY (or UPTIMEROBOT_API_KEY_1..10) environment variables are set',
