@@ -18,15 +18,14 @@ export default async function handler(req, res) {
 
   try {
     if (source === 'uptimerobot') {
-      const body = new URLSearchParams({ api_key: apiKey, id: monitorId });
-      const r = await fetch('https://api.uptimerobot.com/v2/deleteMonitor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: body.toString(),
+      const r = await fetch(`https://api.uptimerobot.com/v3/monitors/${monitorId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${apiKey}` },
       });
-      const data = await r.json();
-      if (data.stat !== 'ok') {
-        let msg = data.error?.message || 'UptimeRobot API error';
+      if (!r.ok) {
+        const data = await r.json().catch(() => ({}));
+        let msg = data.message || data.error?.message || 'UptimeRobot API error';
+        if (Array.isArray(msg)) msg = msg.join(', ');
         if (msg.toLowerCase().includes('not allowed to perform')) {
           msg = 'UptimeRobot blocked this. You are likely using a Read-Only API Key. Please provide a Main API Key to delete monitors.';
         }

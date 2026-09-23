@@ -37,33 +37,34 @@ export default async function handler(req, res) {
   }
 
   try {
-    const params = new URLSearchParams();
-    params.append('api_key', apiKey);
-    params.append('format', 'json');
-    params.append('type', '1'); // 1 = HTTP
-    params.append('url', url);
-    params.append('friendly_name', name);
-    params.append('interval', '300'); // 5 minutes (required for Free plan, prevents "not allowed" error)
-
-    const r = await fetch('https://api.uptimerobot.com/v2/newMonitor', {
+    const r = await fetch('https://api.uptimerobot.com/v3/monitors', {
       method: 'POST',
       headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        'cache-control': 'no-cache',
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
       },
-      body: params.toString()
+      body: JSON.stringify({
+        type: 1, // 1 = HTTP
+        url: url,
+        friendlyName: name,
+        interval: 300,
+        timeout: 30
+      })
     });
 
-    const data = await r.json();
-    if (data.stat !== 'ok') {
-      let errMsg = data.error?.message || 'Failed to create monitor in UptimeRobot';
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      let errMsg = data.message || data.error?.message || 'Failed to create monitor in UptimeRobot';
+      if (Array.isArray(errMsg)) errMsg = errMsg.join(', ');
+      
       if (errMsg.toLowerCase().includes('not allowed to perform')) {
         errMsg = 'UptimeRobot blocked this. You are likely using a Read-Only API Key. Please provide a Main API Key in Settings to create monitors.';
       }
       return res.status(400).json({ error: errMsg });
     }
 
-    return res.status(200).json({ success: true, monitor: data.monitor });
+    const data = await r.json();
+    return res.status(200).json({ success: true, monitor: data });
   } catch (err) {
     return res.status(500).json({ error: err.message || 'Failed to create monitor' });
   }
