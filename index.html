@@ -749,7 +749,54 @@ function applyUptimeToCard(svc, monitor) {
           pointing to <b>${svc.url || svc.name}</b>.
         </div>`;
     } else {
-          const badgeClass = m.statusLabel === 'up' ? 'green' : m.statusLabel === 'down' ? 'red' : m.statusLabel === 'seems_down' ? 'amber' : 'gray';
+      const statusColor = monitor.statusLabel === 'up' ? 'var(--green)' : monitor.statusLabel === 'down' ? 'var(--red)' : 'var(--amber)';
+      const uptime = monitor.uptimeRatio30d != null ? monitor.uptimeRatio30d.toFixed(2) + '%' : '—';
+      const lastChecked = monitor.lastCheckedAt
+        ? new Date(monitor.lastCheckedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : '—';
+      const statusText = monitor.statusLabel === 'up' ? 'Up' : monitor.statusLabel === 'down' ? 'Down' : monitor.statusLabel === 'seems_down' ? 'Seems down' : 'Paused';
+      const sourceLabel = monitor.source === 'updown' ? 'updown.io' : 'UptimeRobot';
+      const monitorLink = monitor.source === 'updown'
+        ? `<a class="uptime-link" href="https://updown.io/checks/${monitor.token}" target="_blank">Open in updown.io →</a>`
+        : `<a class="uptime-link" href="https://uptimerobot.com/dashboard#${monitor.id}" target="_blank">Open in UptimeRobot →</a>`;
+      panel.innerHTML = `
+        <div class="uptime-stat-grid">
+          <div class="uptime-stat">
+            <b style="color:${statusColor}">${statusText}</b>
+            <span>Current status</span>
+          </div>
+          <div class="uptime-stat">
+            <b>${msLabel(monitor.responseTime)}</b>
+            <span>Response time</span>
+          </div>
+          <div class="uptime-stat">
+            <b>${uptime}</b>
+            <span>30-day uptime</span>
+          </div>
+        </div>
+        <div style="font-size:12px; color:var(--text-faint); margin-bottom:8px;">Last checked: ${lastChecked} · via ${sourceLabel}</div>
+        ${monitorLink}`;
+    }
+  }
+}
+
+function findMonitor(svc) {
+  const sUrl = (svc.url || '').toLowerCase().replace(/\/$/, '');
+  if (!sUrl) return null;
+  return MONITORS.find(m => {
+    const mUrl = (m.url || '').toLowerCase().replace(/\/$/, '');
+    return mUrl && (mUrl.includes(sUrl) || sUrl.includes(mUrl));
+  }) || null;
+}
+
+function renderMonitors() {
+  const container = document.getElementById('monitor-list');
+  if (MONITORS.length === 0) {
+    showMessage(container, 'No monitors found', 'Connect an UptimeRobot or updown.io key in Settings, or click Add Monitor above.');
+    return;
+  }
+  container.innerHTML = MONITORS.map(m => {
+    const badgeClass = m.statusLabel === 'up' ? 'green' : m.statusLabel === 'down' ? 'red' : m.statusLabel === 'seems_down' ? 'amber' : 'gray';
     const statusText = m.statusLabel === 'up' ? 'Up' : m.statusLabel === 'down' ? 'Down' : m.statusLabel === 'seems_down' ? 'Seems down' : 'Paused';
     const sourceLabel = m.source === 'updown' ? 'updown.io' : 'UptimeRobot';
     const link = m.source === 'updown' ? `https://updown.io/checks/${m.token}` : `https://uptimerobot.com/dashboard#${m.id}`;
