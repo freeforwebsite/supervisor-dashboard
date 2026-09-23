@@ -61,6 +61,8 @@ export default async function handler(req, res) {
             updatedAt: s.updatedAt,
             account: acc.index,
             accountName: acc.name,
+            buildCommand: s.serviceDetails?.envSpecificDetails?.buildCommand || null,
+            startCommand: s.serviceDetails?.envSpecificDetails?.startCommand || null,
           };
         });
         return { account: acc.index, accountName: acc.name, services };

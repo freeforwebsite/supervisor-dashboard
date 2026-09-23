@@ -392,10 +392,13 @@
       <div class="page" id="page-services">
         <div class="topline">
           <div><h2>Services</h2><p>Everything deployed under your Render account.</p></div>
-          <button class="btn primary" id="btn-open-create-svc">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-            New service
-          </button>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="text" id="svc-search" placeholder="Search services..." style="font-size:13px; padding:7px 12px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text); width:200px;">
+            <button class="btn primary" id="btn-open-create-svc">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              New service
+            </button>
+          </div>
         </div>
         <div id="svc-list"></div>
       </div>
@@ -577,6 +580,15 @@ function showMessage(container, title, body) {
 
 let SERVICES = [];
 let ACCOUNTS = [];
+
+document.getElementById('svc-search').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase();
+  const filtered = SERVICES.filter(s => 
+    s.name.toLowerCase().includes(q) || 
+    (s.accountName && s.accountName.toLowerCase().includes(q))
+  );
+  renderServices(filtered);
+});
 
 async function loadServices() {
   svcList.innerHTML = '<div class="card" style="padding:24px; text-align:center; color:var(--text-dim); font-size:13px;">Loading services…</div>';
@@ -914,6 +926,18 @@ document.getElementById('btn-close-svc-modal').addEventListener('click', () => {
 
 document.getElementById('new-svc-env').addEventListener('change', (e) => {
   document.getElementById('new-svc-node-fields').style.display = e.target.value === 'node' ? 'flex' : 'none';
+});
+
+document.getElementById('new-svc-clone').addEventListener('change', (e) => {
+  if (!e.target.value) return;
+  try {
+    const parsed = JSON.parse(e.target.value);
+    const svc = SERVICES.find(s => s.id === parsed.sourceServiceId);
+    if (svc) {
+      if (svc.buildCommand) document.getElementById('new-svc-build').value = svc.buildCommand;
+      if (svc.startCommand) document.getElementById('new-svc-start').value = svc.startCommand;
+    }
+  } catch(err) {}
 });
 
 document.getElementById('btn-submit-svc').addEventListener('click', async () => {
