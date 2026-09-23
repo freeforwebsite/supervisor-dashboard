@@ -43,6 +43,7 @@ export default async function handler(req, res) {
     params.append('type', '1'); // 1 = HTTP
     params.append('url', url);
     params.append('friendly_name', name);
+    params.append('interval', '300'); // 5 minutes (required for Free plan, prevents "not allowed" error)
 
     const r = await fetch('https://api.uptimerobot.com/v2/newMonitor', {
       method: 'POST',
