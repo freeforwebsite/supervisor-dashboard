@@ -312,6 +312,11 @@
         Services
         <span class="count">3</span>
       </button>
+      <button class="nav-item" data-page="monitors">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M12 20V10M18 20V4M6 20v-4"/></svg>
+        Monitors
+        <span class="count" id="monitor-count">0</span>
+      </button>
       <button class="nav-item" data-page="logs">
         <svg class="icon" viewBox="0 0 24 24"><path d="M4 4h16v16H4z" rx="2"/><path d="M8 9h8M8 13h8M8 17h4"/></svg>
         Logs
@@ -387,12 +392,20 @@
       <div class="page" id="page-services">
         <div class="topline">
           <div><h2>Services</h2><p>Everything deployed under your Render account.</p></div>
-          <button class="btn primary">
-            <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-            New service
-          </button>
         </div>
         <div id="svc-list"></div>
+      </div>
+
+      <!-- MONITORS -->
+      <div class="page" id="page-monitors">
+        <div class="topline">
+          <div><h2>Monitors</h2><p>All UptimeRobot and updown.io checks.</p></div>
+          <button class="btn primary" id="btn-open-monitor-modal">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            Add monitor
+          </button>
+        </div>
+        <div id="monitor-list"></div>
       </div>
 
       <!-- LOGS -->
@@ -447,6 +460,27 @@
         </div>
       </div>
     </main>
+  </div>
+</div>
+
+<!-- Add Monitor Modal -->
+<div id="monitor-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center; padding: 20px;">
+  <div class="card" style="width: 100%; max-width: 400px; padding: 24px;">
+    <h3 style="margin: 0 0 16px 0;">Add Uptime Monitor</h3>
+    <div style="display:flex; flex-direction:column; gap:12px;">
+      <div>
+        <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Friendly Name</div>
+        <input type="text" id="new-monitor-name" placeholder="My Website" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+      </div>
+      <div>
+        <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">URL to Monitor</div>
+        <input type="url" id="new-monitor-url" placeholder="https://example.com" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn" id="btn-close-monitor-modal" style="flex:1; justify-content:center;">Cancel</button>
+        <button class="btn primary" id="btn-submit-monitor" style="flex:1; justify-content:center;">Add Monitor</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -564,6 +598,7 @@ function renderServices(services) {
             ${svc.status === 'suspended'
               ? `<button class="btn primary" data-action="start">Start</button>`
               : `<button class="btn" data-action="suspend">Suspend</button>`}
+            <button class="btn" data-action="deploy">Deploy</button>
           </div>
           <svg class="icon chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
         </div>
@@ -595,26 +630,34 @@ function renderServices(services) {
         }
       });
 
-      const statusBtn = el.querySelector('[data-action="start"], [data-action="suspend"]');
-      statusBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        const action = statusBtn.dataset.action;
-        statusBtn.disabled = true;
-        statusBtn.textContent = action === 'start' ? 'Starting…' : 'Suspending…';
-        try {
-          const r = await fetch(`/api/${action}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...getCustomHeaders() },
-            body: JSON.stringify({ serviceId: svc.id, account: svc.account }),
-          });
-          const result = await r.json();
-          if (!r.ok || !result.ok) throw new Error(result.error || 'Failed');
-          setTimeout(loadServices, 1500);
-        } catch (err) {
-          statusBtn.disabled = false;
-          statusBtn.textContent = action === 'start' ? 'Start' : 'Suspend';
-          alert('Failed: ' + err.message);
-        }
+      const actionBtns = el.querySelectorAll('[data-action]');
+      actionBtns.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const action = btn.dataset.action;
+          btn.disabled = true;
+          const ogText = btn.textContent;
+          btn.textContent = action === 'start' ? 'Starting…' : action === 'deploy' ? 'Deploying…' : 'Suspending…';
+          try {
+            const r = await fetch(`/api/${action}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...getCustomHeaders() },
+              body: JSON.stringify({ serviceId: svc.id, account: svc.account }),
+            });
+            const result = await r.json();
+            if (!r.ok) throw new Error(result.error || 'Failed');
+            if (action === 'deploy') {
+              btn.textContent = 'Deployed';
+              setTimeout(() => { btn.disabled = false; btn.textContent = ogText; }, 2000);
+            } else {
+              setTimeout(loadServices, 1500);
+            }
+          } catch (err) {
+            btn.disabled = false;
+            btn.textContent = ogText;
+            alert('Failed: ' + err.message);
+          }
+        });
       });
 
       el.querySelectorAll('.tab').forEach(tab => {
@@ -746,6 +789,74 @@ function findMonitor(svc) {
   }) || null;
 }
 
+function renderMonitors() {
+  const container = document.getElementById('monitor-list');
+  if (MONITORS.length === 0) {
+    showMessage(container, 'No monitors found', 'Connect an UptimeRobot or updown.io key in Settings, or click Add Monitor above.');
+    return;
+  }
+  container.innerHTML = MONITORS.map(m => {
+    const statusColor = m.statusLabel === 'up' ? 'var(--green)' : m.statusLabel === 'down' ? 'var(--red)' : 'var(--amber)';
+    const statusText = m.statusLabel === 'up' ? 'Up' : m.statusLabel === 'down' ? 'Down' : m.statusLabel === 'seems_down' ? 'Seems down' : 'Paused';
+    const sourceLabel = m.source === 'updown' ? 'updown.io' : 'UptimeRobot';
+    const link = m.source === 'updown' ? `https://updown.io/checks/${m.token}` : `https://uptimerobot.com/dashboard#${m.id}`;
+    return `
+      <div class="card svc-card">
+        <div class="svc-header" style="cursor:default;">
+          <div class="info">
+            <h3 style="margin-bottom:6px;">${m.name}</h3>
+            <div class="tags">
+              <span class="badge" style="color:${statusColor}; border-color:${statusColor}"><span class="bdot" style="background:${statusColor}"></span>${statusText}</span>
+              <span class="uptime-chip">${msLabel(m.responseTime)}</span>
+              <span class="uptime-chip">${m.uptimeRatio30d != null ? m.uptimeRatio30d.toFixed(2) + '%' : '—'}</span>
+            </div>
+            <div style="font-size:12px; color:var(--text-faint); margin-top:8px;">${m.url}</div>
+          </div>
+          <div class="actions">
+            <a href="${link}" target="_blank" class="btn" style="text-decoration:none;">Open in ${sourceLabel}</a>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Modal Logic
+document.getElementById('btn-open-monitor-modal').addEventListener('click', () => {
+  document.getElementById('monitor-modal').style.display = 'flex';
+});
+document.getElementById('btn-close-monitor-modal').addEventListener('click', () => {
+  document.getElementById('monitor-modal').style.display = 'none';
+});
+document.getElementById('btn-submit-monitor').addEventListener('click', async () => {
+  const name = document.getElementById('new-monitor-name').value.trim();
+  const url = document.getElementById('new-monitor-url').value.trim();
+  const btn = document.getElementById('btn-submit-monitor');
+  if (!name || !url) return alert('Name and URL are required');
+  btn.disabled = true;
+  btn.textContent = 'Adding...';
+  try {
+    const r = await fetch('/api/new-monitor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...getCustomHeaders() },
+      body: JSON.stringify({ name, url })
+    });
+    const result = await r.json();
+    if (!r.ok) throw new Error(result.error || 'Failed to add monitor');
+    document.getElementById('monitor-modal').style.display = 'none';
+    document.getElementById('new-monitor-name').value = '';
+    document.getElementById('new-monitor-url').value = '';
+    btn.disabled = false;
+    btn.textContent = 'Add Monitor';
+    document.getElementById('monitor-list').innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-faint);">Loading monitors...</div>';
+    loadUptime();
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Add Monitor';
+  }
+});
+
 async function loadUptime() {
   try {
     // Fetch UptimeRobot and updown.io concurrently — both are optional, fail silently
@@ -768,9 +879,11 @@ async function loadUptime() {
     }
 
     MONITORS = allMonitors;
+    document.getElementById('monitor-count').textContent = MONITORS.length;
 
     // Match every Render service to its monitor and update cards
     SERVICES.forEach(svc => applyUptimeToCard(svc, findMonitor(svc)));
+    renderMonitors();
 
     // Update overview avg uptime stat (across all monitors from both services)
     const monitored = MONITORS.filter(m => m.uptimeRatio30d != null);
