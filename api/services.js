@@ -56,6 +56,7 @@ export default async function handler(req, res) {
             name: s.name,
             type: s.type,
             status: s.suspended === 'suspended' ? 'suspended' : (s.status || 'running'),
+            suspenders: s.suspenders || [],
             region: s.serviceDetails?.region || null,
             url: s.serviceDetails?.url || null,
             updatedAt: s.updatedAt,

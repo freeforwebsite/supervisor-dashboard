@@ -624,9 +624,15 @@ function icon(name) {
   return paths[name] || paths.running;
 }
 
-function badgeFor(status) {
+function badgeFor(svc) {
+  const status = svc.status;
   if (status === 'running' || status === 'live') return '<span class="badge green"><span class="bdot"></span>Running</span>';
-  if (status === 'suspended') return '<span class="badge amber"><span class="bdot"></span>Suspended</span>';
+  if (status === 'suspended') {
+    const isRenderSuspended = svc.suspenders && svc.suspenders.length > 0 && !svc.suspenders.includes('user');
+    return isRenderSuspended
+      ? '<span class="badge amber" style="color:#d97706; background:#fef3c7; border-color:#fde68a;" title="Suspended by Render (Limits)"><span class="bdot" style="background:#d97706;"></span>Suspended (Limits)</span>'
+      : '<span class="badge amber"><span class="bdot"></span>Suspended</span>';
+  }
   return '<span class="badge red"><span class="bdot"></span>' + (status || 'Unknown') + '</span>';
 }
 
@@ -672,7 +678,7 @@ document.getElementById('btn-open-bulk-delete').addEventListener('click', () => 
         <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${svc.name}</div>
         <div style="font-size:11.5px; color:var(--text-faint);">${svc.accountName}</div>
       </div>
-      <div style="flex-shrink:0;">${badgeFor(svc.status)}</div>
+      <div style="flex-shrink:0;">${badgeFor(svc)}</div>
     `;
     bulkDeleteList.appendChild(row);
   });
@@ -859,11 +865,13 @@ function renderServices(servicesToRender) {
               </button>
             </div>` : ''}
           </div>
-          ${badgeFor(svc.status)}
+          ${badgeFor(svc)}
           <div class="uptime-row" id="uptime-row-${svc.id}"></div>
           <div class="svc-actions">
             ${svc.status === 'suspended'
-              ? `<button class="btn primary" data-action="start">Start</button>`
+              ? (svc.suspenders && svc.suspenders.length > 0 && !svc.suspenders.includes('user')
+                  ? `<button class="btn primary" disabled title="Suspended by Render limits. Cannot start via API." style="opacity:0.5; cursor:not-allowed;">Start</button>`
+                  : `<button class="btn primary" data-action="start">Start</button>`)
               : `<button class="btn" data-action="suspend">Suspend</button>`}
             <button class="btn" data-action="deploy">Deploy</button>
             <button class="btn" style="color:var(--red); border-color:var(--red);" data-action="delete-service">Delete</button>
