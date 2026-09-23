@@ -422,124 +422,205 @@
 </div>
 
 <script>
-const SERVICES = [
-  { name: 'telegram-relay-bot', sub: 'Web Service · Node · oregon', status: 'running',
-    logs: [['info','10:41:02','listening on :10000'],['info','10:41:03','telegram webhook set'],['warn','10:44:18','reconnecting to webhook'],['info','10:44:20','reconnected']],
-    env: [['BOT_TOKEN','•••• 3fA1'],['CHAT_ID','5521883'],['NODE_ENV','production']] },
-  { name: 'music-finder-api', sub: 'Web Service · Node · oregon', status: 'running',
-    logs: [['info','09:02:11','server up'],['warn','09:14:55','ffmpeg queue at 80%'],['info','10:44:33','job complete: 4f2c']],
-    env: [['ACOUSTID_KEY','•••• 91bd'],['PORT','3000']] },
-  { name: 'stereo-downloader', sub: 'Web Service · Node · oregon', status: 'suspended',
-    logs: [['info','09:15:02','idle 15m → suspended']],
-    env: [['YT_COOKIE','•••• e02f']] },
-];
+const svcList = document.getElementById('svc-list');
+const envList = document.getElementById('env-list');
+const combinedLogs = document.getElementById('combined-logs');
 
-const icon = (name) => {
+function icon(name) {
   const paths = {
     running: '<circle cx="12" cy="12" r="9"/><path d="M10 8l6 4-6 4z"/>',
     stopped: '<rect x="4" y="4" width="16" height="16" rx="4"/>',
   };
   return paths[name] || paths.running;
-};
-
-function badgeFor(status) {
-  if (status === 'running') return '<span class="badge green"><span class="bdot"></span>Running</span>';
-  if (status === 'suspended') return '<span class="badge amber"><span class="bdot"></span>Suspended</span>';
-  return '<span class="badge red"><span class="bdot"></span>Error</span>';
 }
 
-const svcList = document.getElementById('svc-list');
-const envList = document.getElementById('env-list');
-const combinedLogs = document.getElementById('combined-logs');
+function badgeFor(status) {
+  if (status === 'running' || status === 'live') return '<span class="badge green"><span class="bdot"></span>Running</span>';
+  if (status === 'suspended') return '<span class="badge amber"><span class="bdot"></span>Suspended</span>';
+  return '<span class="badge red"><span class="bdot"></span>' + (status || 'Unknown') + '</span>';
+}
 
-SERVICES.forEach((svc, i) => {
-  const el = document.createElement('div');
-  el.className = 'card svc-card';
-  const logHtml = svc.logs.map(([lvl, t, msg]) => `<div class="log-line ${lvl === 'info' ? '' : lvl}"><b>${t}</b>${msg}</div>`).join('');
-  const envHtml = svc.env.map(([k, v]) => `<div class="env-row"><span class="env-key">${k}</span><span class="env-val">${v}</span></div>`).join('');
+function showMessage(container, title, body) {
+  container.innerHTML = `
+    <div class="card empty">
+      <div class="ic"><svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></div>
+      <h3>${title}</h3>
+      <p>${body}</p>
+    </div>`;
+}
 
-  el.innerHTML = `
-    <div class="svc-head" data-toggle>
-      <div class="svc-icon"><svg class="icon" viewBox="0 0 24 24">${icon('running')}</svg></div>
-      <div class="svc-title"><b>${svc.name}</b><span>${svc.sub}</span></div>
-      ${badgeFor(svc.status)}
-      <div class="svc-actions">
-        ${svc.status === 'running'
-          ? `<button class="btn" data-action="toggle-status">Suspend</button>`
-          : `<button class="btn primary" data-action="toggle-status">Start</button>`}
-      </div>
-      <svg class="icon chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
-    </div>
-    <div class="svc-body">
-      <div class="tabs">
-        <button class="tab active" data-tab="logs">Logs</button>
-        <button class="tab" data-tab="env">Environment</button>
-      </div>
-      <div class="tab-panel active" data-view="logs">${logHtml}</div>
-      <div class="tab-panel" data-view="env">
-        ${envHtml}
-        <div class="env-add">
-          <input type="text" placeholder="KEY">
-          <input type="text" placeholder="value">
-          <button class="btn primary" data-action="add-env">Add</button>
+let SERVICES = [];
+
+async function loadServices() {
+  svcList.innerHTML = '<div class="card" style="padding:24px; text-align:center; color:var(--text-dim); font-size:13px;">Loading services…</div>';
+  try {
+    const r = await fetch('/api/services');
+    const data = await r.json();
+
+    if (!r.ok) {
+      showMessage(svcList, 'Could not load services', data.error || 'Check your RENDER_API_KEY_1..10 environment variables in Vercel, then redeploy.');
+      return;
+    }
+    if (!data.services || data.services.length === 0) {
+      showMessage(svcList, 'No services found', 'Your API key(s) are set, but no services were returned. Double-check the key has access to the right account.');
+      updateCounts([]);
+      return;
+    }
+
+    SERVICES = data.services;
+    renderServices(SERVICES);
+    updateCounts(SERVICES);
+
+    if (data.errors && data.errors.length) {
+      const warn = document.createElement('div');
+      warn.className = 'card';
+      warn.style.cssText = 'padding:12px 16px; margin-bottom:12px; border-color:var(--amber); font-size:12.5px; color:var(--amber);';
+      warn.textContent = `${data.errors.length} account(s) failed to load — check those API keys.`;
+      svcList.parentElement.insertBefore(warn, svcList);
+    }
+  } catch (err) {
+    showMessage(svcList, 'Network error', 'Could not reach /api/services. Make sure the functions deployed correctly.');
+  }
+}
+
+function updateCounts(services) {
+  const running = services.filter(s => s.status === 'running' || s.status === 'live').length;
+  const suspended = services.filter(s => s.status === 'suspended').length;
+  document.querySelector('.nav-item[data-page="services"] .count').textContent = services.length;
+  const stats = document.querySelectorAll('#page-overview .hero-stats b');
+  if (stats[0]) stats[0].textContent = services.length;
+  if (stats[1]) stats[1].textContent = running;
+  if (stats[2]) stats[2].textContent = suspended;
+  const statCards = document.querySelectorAll('#page-overview .stat-card b');
+  if (statCards[0]) statCards[0].textContent = running;
+  if (statCards[1]) statCards[1].textContent = suspended;
+}
+
+function renderServices(services) {
+  svcList.innerHTML = '';
+  envList.innerHTML = '';
+  combinedLogs.innerHTML = '';
+
+  const byAccount = {};
+  services.forEach(s => {
+    (byAccount[s.accountName] = byAccount[s.accountName] || []).push(s);
+  });
+
+  Object.entries(byAccount).forEach(([accountName, list]) => {
+    const label = document.createElement('div');
+    label.className = 'sb-section-label';
+    label.style.cssText = 'padding:0; margin:18px 0 8px;';
+    label.textContent = accountName;
+    svcList.appendChild(label);
+
+    list.forEach(svc => {
+      const el = document.createElement('div');
+      el.className = 'card svc-card';
+      el.innerHTML = `
+        <div class="svc-head" data-toggle>
+          <div class="svc-icon"><svg class="icon" viewBox="0 0 24 24">${icon('running')}</svg></div>
+          <div class="svc-title"><b>${svc.name}</b><span>${svc.type || 'Service'}${svc.region ? ' · ' + svc.region : ''}</span></div>
+          ${badgeFor(svc.status)}
+          <div class="svc-actions">
+            ${svc.status === 'suspended'
+              ? `<button class="btn primary" data-action="start">Start</button>`
+              : `<button class="btn" data-action="suspend">Suspend</button>`}
+          </div>
+          <svg class="icon chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
         </div>
-      </div>
-    </div>
-  `;
+        <div class="svc-body">
+          <div class="tabs">
+            <button class="tab active" data-tab="logs">Logs</button>
+            <button class="tab" data-tab="env">Environment</button>
+          </div>
+          <div class="tab-panel active" data-view="logs">
+            <div style="font-size:12.5px; color:var(--text-faint); padding:8px 0;">Live log streaming isn't wired up yet — view logs on Render directly for now.</div>
+          </div>
+          <div class="tab-panel" data-view="env">
+            <div class="env-loading" style="font-size:12.5px; color:var(--text-faint);">Tap to load…</div>
+          </div>
+        </div>
+      `;
 
-  el.querySelector('[data-toggle]').addEventListener('click', (e) => {
-    if (e.target.closest('[data-action]')) return;
-    el.classList.toggle('open');
-  });
+      let envLoaded = false;
+      el.querySelector('[data-toggle]').addEventListener('click', (e) => {
+        if (e.target.closest('[data-action]')) return;
+        el.classList.toggle('open');
+        if (el.classList.contains('open') && !envLoaded) {
+          envLoaded = true;
+          loadEnvInto(el.querySelector('[data-view="env"]'), svc);
+        }
+      });
 
-  el.querySelector('[data-action="toggle-status"]').addEventListener('click', (e) => {
-    e.stopPropagation();
-    const badge = el.querySelector('.badge');
-    const btn = e.currentTarget;
-    const running = badge.classList.contains('green');
-    badge.className = 'badge ' + (running ? 'amber' : 'green');
-    badge.innerHTML = `<span class="bdot"></span>${running ? 'Suspended' : 'Running'}`;
-    btn.textContent = running ? 'Start' : 'Suspend';
-    btn.className = 'btn' + (running ? ' primary' : '');
-  });
+      const statusBtn = el.querySelector('[data-action="start"], [data-action="suspend"]');
+      statusBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const action = statusBtn.dataset.action;
+        statusBtn.disabled = true;
+        statusBtn.textContent = action === 'start' ? 'Starting…' : 'Suspending…';
+        try {
+          const r = await fetch(`/api/${action}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ serviceId: svc.id, account: svc.account }),
+          });
+          const result = await r.json();
+          if (!r.ok || !result.ok) throw new Error(result.error || 'Failed');
+          setTimeout(loadServices, 1500);
+        } catch (err) {
+          statusBtn.disabled = false;
+          statusBtn.textContent = action === 'start' ? 'Start' : 'Suspend';
+          alert('Failed: ' + err.message);
+        }
+      });
 
-  el.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      el.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      el.querySelectorAll('.tab-panel').forEach(v => v.classList.remove('active'));
-      tab.classList.add('active');
-      el.querySelector(`[data-view="${tab.dataset.tab}"]`).classList.add('active');
+      el.querySelectorAll('.tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          el.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          el.querySelectorAll('.tab-panel').forEach(v => v.classList.remove('active'));
+          tab.classList.add('active');
+          el.querySelector(`[data-view="${tab.dataset.tab}"]`).classList.add('active');
+          if (tab.dataset.tab === 'env' && !envLoaded) {
+            envLoaded = true;
+            loadEnvInto(el.querySelector('[data-view="env"]'), svc);
+          }
+        });
+      });
+
+      svcList.appendChild(el);
     });
+
+    const envGroup = document.createElement('div');
+    envGroup.className = 'card';
+    envGroup.style.cssText = 'margin-bottom:12px; padding:16px 18px;';
+    envGroup.innerHTML = `<div style="font-weight:600; font-size:13.5px; margin-bottom:8px;">${accountName}</div><div style="font-size:12px; color:var(--text-faint);">Expand a service under Services and open its Environment tab to view/add variables.</div>`;
+    envList.appendChild(envGroup);
   });
 
-  el.querySelector('[data-action="add-env"]').addEventListener('click', () => {
-    const inputs = el.querySelectorAll('.env-add input');
-    if (!inputs[0].value.trim()) return;
-    const row = document.createElement('div');
-    row.className = 'env-row';
-    row.innerHTML = `<span class="env-key">${inputs[0].value}</span><span class="env-val">${inputs[1].value || '(empty)'}</span>`;
-    el.querySelector('[data-view="env"]').insertBefore(row, el.querySelector('.env-add'));
-    inputs[0].value = ''; inputs[1].value = '';
-  });
+  if (combinedLogs) {
+    combinedLogs.innerHTML = '<div style="padding:16px; font-size:12.5px; color:var(--text-faint);">Live log streaming isn\'t wired up yet.</div>';
+  }
+}
 
-  svcList.appendChild(el);
+async function loadEnvInto(container, svc) {
+  container.innerHTML = '<div style="font-size:12px; color:var(--text-faint);">Loading…</div>';
+  try {
+    const r = await fetch(`/api/env?serviceId=${encodeURIComponent(svc.id)}&account=${svc.account}`);
+    const data = await r.json();
+    if (!r.ok) {
+      container.innerHTML = `<div style="font-size:12px; color:var(--red);">${data.error || 'Failed to load'}</div>`;
+      return;
+    }
+    const rows = (data.envVars || []).map(v =>
+      `<div class="env-row"><span class="env-key">${v.key}</span><span class="env-val">${v.value ? '•••• ' + v.value.slice(-4) : '(empty)'}</span></div>`
+    ).join('') || '<div style="font-size:12px; color:var(--text-faint);">No environment variables set.</div>';
+    container.innerHTML = rows;
+  } catch (err) {
+    container.innerHTML = '<div style="font-size:12px; color:var(--red);">Network error loading env vars.</div>';
+  }
+}
 
-  // env page
-  const envGroup = document.createElement('div');
-  envGroup.className = 'card';
-  envGroup.style.marginBottom = '12px';
-  envGroup.style.padding = '16px 18px';
-  envGroup.innerHTML = `<div style="font-weight:600; font-size:13.5px; margin-bottom:8px;">${svc.name}</div>${envHtml}`;
-  envList.appendChild(envGroup);
-
-  // combined logs
-  svc.logs.forEach(([lvl, t, msg]) => {
-    const line = document.createElement('div');
-    line.className = 'log-line ' + (lvl === 'info' ? '' : lvl);
-    line.innerHTML = `<b>${t}</b>${svc.name} — ${msg}`;
-    combinedLogs.appendChild(line);
-  });
-});
+loadServices();
 
 // Sidebar nav
 document.querySelectorAll('.nav-item').forEach(item => {
