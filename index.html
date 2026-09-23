@@ -554,11 +554,7 @@
 <div id="delete-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:999; align-items:center; justify-content:center; padding: 20px;">
   <div class="card" style="width: 100%; max-width: 400px; padding: 24px;">
     <h3 style="margin: 0 0 12px 0; color: var(--red);">Delete Service</h3>
-    <p style="font-size:13.5px; margin:0 0 20px 0; line-height:1.5;">
-      Are you absolutely sure you want to permanently delete 
-      <strong id="delete-svc-name" style="color:var(--text);"></strong>? 
-      This action cannot be undone.
-    </p>
+    <p id="delete-modal-msg" style="font-size:13.5px; margin:0 0 20px 0; line-height:1.5;"></p>
     <div style="display:flex; gap:8px;">
       <button class="btn" id="btn-cancel-delete" style="flex:1; justify-content:center;">Cancel</button>
       <button class="btn" id="btn-confirm-delete" style="flex:1; justify-content:center; background:var(--red); color:white; border-color:var(--red);">Delete</button>
@@ -648,7 +644,7 @@ document.getElementById('btn-open-bulk-delete').addEventListener('click', () => 
     const row = document.createElement('label');
     row.style.cssText = 'display:flex; align-items:center; gap:12px; padding:10px; border-bottom:1px solid var(--border); cursor:pointer; font-size:13px; margin:0;';
     row.innerHTML = `
-      <input type="checkbox" value="${svc.id}" data-account="${svc.account}" class="bulk-cb" style="width:16px; height:16px; cursor:pointer;">
+      <input type="checkbox" value="${svc.id}" data-account="${svc.account}" data-status="${svc.status}" class="bulk-cb" style="width:16px; height:16px; cursor:pointer;">
       <div style="flex:1; display:flex; align-items:center; gap:8px;">
         <div style="font-weight:600;">${svc.name}</div>
         <div style="font-size:11.5px; color:var(--text-faint);">${svc.accountName}</div>
@@ -683,40 +679,54 @@ document.getElementById('btn-close-bulk-modal').addEventListener('click', () => 
 btnConfirmBulk.addEventListener('click', async () => {
   const selected = Array.from(document.querySelectorAll('.bulk-cb:checked')).map(cb => ({
     id: cb.value,
-    account: cb.dataset.account
+    account: cb.dataset.account,
+    status: cb.dataset.status
   }));
   
   if (selected.length === 0) return;
   
-  if (!confirm(`Are you absolutely sure you want to permanently delete these ${selected.length} services?\n\nThis cannot be undone.`)) {
-    return;
+  const runningCount = selected.filter(s => s.status === 'running' || s.status === 'live').length;
+  let msg = `Are you absolutely sure you want to permanently delete <strong>these ${selected.length} services</strong>?`;
+  if (runningCount > 0) {
+    msg += `<br><br><span style="color:var(--amber);">⚠️ Warning: <b>${runningCount}</b> of these services are currently running in the background!</span>`;
   }
+  msg += `<br><br>This action cannot be undone.`;
 
-  btnConfirmBulk.disabled = true;
-  
-  let successCount = 0;
-  let failCount = 0;
+  document.getElementById('delete-modal-msg').innerHTML = msg;
+  document.getElementById('delete-modal').style.display = 'flex';
 
-  for (let i = 0; i < selected.length; i++) {
-    btnConfirmBulk.textContent = `Deleting ${i + 1} of ${selected.length}…`;
-    try {
-      const r = await fetch('/api/delete-service', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', ...getCustomHeaders() },
-        body: JSON.stringify({ serviceId: selected[i].id, account: selected[i].account }),
-      });
-      if (r.ok) successCount++;
-      else failCount++;
-    } catch (err) {
-      failCount++;
+  document.getElementById('btn-cancel-delete').onclick = () => {
+    document.getElementById('delete-modal').style.display = 'none';
+  };
+
+  document.getElementById('btn-confirm-delete').onclick = async () => {
+    document.getElementById('delete-modal').style.display = 'none';
+    btnConfirmBulk.disabled = true;
+    
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < selected.length; i++) {
+      btnConfirmBulk.textContent = `Deleting ${i + 1} of ${selected.length}…`;
+      try {
+        const r = await fetch('/api/delete-service', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json', ...getCustomHeaders() },
+          body: JSON.stringify({ serviceId: selected[i].id, account: selected[i].account }),
+        });
+        if (r.ok) successCount++;
+        else failCount++;
+      } catch (err) {
+        failCount++;
+      }
     }
-  }
 
-  bulkDeleteModal.style.display = 'none';
-  if (failCount > 0) {
-    alert(`Bulk delete completed.\n${successCount} succeeded\n${failCount} failed`);
-  }
-  loadServices();
+    bulkDeleteModal.style.display = 'none';
+    if (failCount > 0) {
+      alert(`Bulk delete completed.\n${successCount} succeeded\n${failCount} failed`);
+    }
+    loadServices();
+  };
 });
 
 async function loadServices() {
@@ -861,7 +871,7 @@ function renderServices(servicesToRender) {
           const action = btn.dataset.action;
           
           if (action === 'delete-service') {
-            document.getElementById('delete-svc-name').textContent = svc.name;
+            document.getElementById('delete-modal-msg').innerHTML = `Are you absolutely sure you want to permanently delete <strong style="color:var(--text);">${svc.name}</strong>?<br><br>This action cannot be undone.`;
             document.getElementById('delete-modal').style.display = 'flex';
             
             document.getElementById('btn-cancel-delete').onclick = () => {
