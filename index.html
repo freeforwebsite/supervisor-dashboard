@@ -1038,6 +1038,7 @@ function uptimeBadge(monitor) {
   if (label === 'down')        return '<span class="badge red"><span class="bdot"></span>Down</span>';
   if (label === 'seems_down')  return '<span class="badge amber"><span class="bdot"></span>Seems down</span>';
   if (label === 'paused')      return '<span class="badge gray"><span class="bdot"></span>Paused</span>';
+  if (label === 'not_checked') return '<span class="badge gray"><span class="bdot"></span>Pending</span>';
   return '<span class="badge gray"><span class="bdot"></span>Unknown</span>';
 }
 
@@ -1075,7 +1076,7 @@ function applyUptimeToCard(svc, monitor) {
       const lastChecked = monitor.lastCheckedAt
         ? new Date(monitor.lastCheckedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         : '—';
-      const statusText = monitor.statusLabel === 'up' ? 'Up' : monitor.statusLabel === 'down' ? 'Down' : monitor.statusLabel === 'seems_down' ? 'Seems down' : 'Paused';
+      const statusText = monitor.statusLabel === 'up' ? 'Up' : monitor.statusLabel === 'down' ? 'Down' : monitor.statusLabel === 'seems_down' ? 'Seems down' : monitor.statusLabel === 'not_checked' ? 'Pending' : 'Paused';
       const sourceLabel = monitor.source === 'updown' ? 'updown.io' : 'UptimeRobot';
       const monitorLink = monitor.source === 'updown'
         ? `<a class="uptime-link" href="https://updown.io/checks/${monitor.token}" target="_blank">Open in updown.io →</a>`
@@ -1117,8 +1118,8 @@ function renderMonitors() {
     return;
   }
   container.innerHTML = MONITORS.map(m => {
-    const badgeClass = m.statusLabel === 'up' ? 'green' : m.statusLabel === 'down' ? 'red' : m.statusLabel === 'seems_down' ? 'amber' : 'gray';
-    const statusText = m.statusLabel === 'up' ? 'Up' : m.statusLabel === 'down' ? 'Down' : m.statusLabel === 'seems_down' ? 'Seems down' : 'Paused';
+    const badgeClass = m.statusLabel === 'up' ? 'green' : m.statusLabel === 'down' ? 'red' : m.statusLabel === 'seems_down' ? 'amber' : m.statusLabel === 'not_checked' ? 'gray' : 'gray';
+    const statusText = m.statusLabel === 'up' ? 'Up' : m.statusLabel === 'down' ? 'Down' : m.statusLabel === 'seems_down' ? 'Seems down' : m.statusLabel === 'not_checked' ? 'Pending' : 'Paused';
     const sourceLabel = m.source === 'updown' ? 'updown.io' : 'UptimeRobot';
     const link = m.source === 'updown' ? `https://updown.io/checks/${m.token}` : `https://uptimerobot.com/dashboard#${m.id}`;
     return `
@@ -1155,8 +1156,8 @@ document.getElementById('btn-open-bulk-delete-monitor').addEventListener('click'
   sorted.forEach(m => {
     const row = document.createElement('label');
     row.style.cssText = 'display:flex; align-items:center; gap:12px; padding:10px; border-bottom:1px solid var(--border); cursor:pointer; font-size:13px; margin:0;';
-    const badgeClass = m.statusLabel === 'up' ? 'green' : m.statusLabel === 'down' ? 'red' : m.statusLabel === 'seems_down' ? 'amber' : 'gray';
-    const statusText = m.statusLabel === 'up' ? 'Up' : m.statusLabel === 'down' ? 'Down' : m.statusLabel === 'seems_down' ? 'Seems down' : 'Paused';
+    const badgeClass = m.statusLabel === 'up' ? 'green' : m.statusLabel === 'down' ? 'red' : m.statusLabel === 'seems_down' ? 'amber' : m.statusLabel === 'not_checked' ? 'gray' : 'gray';
+    const statusText = m.statusLabel === 'up' ? 'Up' : m.statusLabel === 'down' ? 'Down' : m.statusLabel === 'seems_down' ? 'Seems down' : m.statusLabel === 'not_checked' ? 'Pending' : 'Paused';
     
     row.innerHTML = `
       <input type="checkbox" value="${m.id}" data-account="${m.account}" data-source="${m.source}" class="bulk-cb-monitor" style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">

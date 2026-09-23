@@ -77,6 +77,7 @@ export default async function handler(req, res) {
             : m.status === 9 ? 'down'
             : m.status === 8 ? 'seems_down'
             : m.status === 0 ? 'paused'
+            : m.status === 1 ? 'not_checked'
             : 'unknown',
           responseTime: m.response_times?.[0]?.value ?? null,
           uptimeRatio30d: m.custom_uptime_ratio ? parseFloat(m.custom_uptime_ratio) : null,
