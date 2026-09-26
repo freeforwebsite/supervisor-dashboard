@@ -561,6 +561,16 @@
   </div>
 </div>
 
+<!-- Generic Alert Modal -->
+<div id="alert-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:9999; align-items:center; justify-content:center; padding: 20px;">
+  <div class="card" style="width: 100%; max-width: 400px; padding: 24px; text-align: center;">
+    <div id="alert-modal-icon" style="margin-bottom: 16px;"></div>
+    <h3 id="alert-modal-title" style="margin: 0 0 12px 0;">Notice</h3>
+    <p id="alert-modal-msg" style="font-size:14px; margin:0 0 24px 0; line-height:1.5; color: var(--text-faint); white-space: pre-wrap;"></p>
+    <button class="btn primary" id="btn-close-alert" style="width: 100%; justify-content:center;">OK</button>
+  </div>
+</div>
+
 <!-- Delete Service Modal -->
 <div id="delete-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:1050; align-items:center; justify-content:center; padding: 20px;">
   <div class="card" style="width: 100%; max-width: 400px; padding: 24px;">
@@ -759,10 +769,30 @@ btnConfirmBulk.addEventListener('click', async () => {
 
     bulkDeleteModal.style.display = 'none';
     if (failCount > 0) {
-      alert(`Bulk delete completed.\n${successCount} succeeded\n${failCount} failed`);
+      showAlert('Bulk Delete Finished', `${successCount} succeeded\n${failCount} failed`, 'error');
+    } else {
+      showAlert('Bulk Delete Complete', `Successfully deleted ${successCount} items.`, 'success');
     }
     loadServices();
   };
+});
+
+function showAlert(title, msg, type = 'info') {
+  const iconDiv = document.getElementById('alert-modal-icon');
+  if (type === 'success') {
+    iconDiv.innerHTML = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`;
+  } else if (type === 'error') {
+    iconDiv.innerHTML = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
+  } else {
+    iconDiv.innerHTML = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+  }
+  document.getElementById('alert-modal-title').textContent = title;
+  document.getElementById('alert-modal-msg').textContent = msg;
+  document.getElementById('alert-modal').style.display = 'flex';
+}
+
+document.getElementById('btn-close-alert').addEventListener('click', () => {
+  document.getElementById('alert-modal').style.display = 'none';
 });
 
 async function loadServices() {
@@ -955,7 +985,7 @@ function renderServices(servicesToRender) {
               } catch (err) {
                 btn.disabled = false;
                 btn.textContent = ogText;
-                alert('Failed: ' + err.message);
+                showAlert('Operation Failed', err.message, 'error');
               }
             };
             return;
@@ -981,7 +1011,7 @@ function renderServices(servicesToRender) {
           } catch (err) {
             btn.disabled = false;
             btn.textContent = ogText;
-            alert('Failed: ' + err.message);
+            showAlert('Operation Failed', err.message, 'error');
           }
         });
       });
@@ -1242,7 +1272,9 @@ btnConfirmBulkMonitor.addEventListener('click', async () => {
 
     bulkDeleteMonitorModal.style.display = 'none';
     if (failCount > 0) {
-      alert(`Bulk delete completed.\n${successCount} succeeded\n${failCount} failed`);
+      showAlert('Bulk Delete Finished', `${successCount} succeeded\n${failCount} failed`, 'error');
+    } else {
+      showAlert('Bulk Delete Complete', `Successfully deleted ${successCount} items.`, 'success');
     }
     loadUptime();
   };
@@ -1343,7 +1375,7 @@ document.getElementById('btn-submit-svc').addEventListener('click', async () => 
     }
   }
 
-  if (!account || !name || !repo) return alert('Target Account, Name, and Repository URL are required.');
+  if (!account || !name || !repo) { showAlert('Validation Error', 'Target Account, Name, and Repository URL are required.', 'error'); return; }
 
   btn.disabled = true;
   btn.textContent = 'Deploying...';
@@ -1366,10 +1398,10 @@ document.getElementById('btn-submit-svc').addEventListener('click', async () => 
     document.getElementById('new-svc-node-fields').style.display = 'flex';
     btn.disabled = false;
     btn.textContent = 'Deploy Service';
-    alert('Service deployment initiated successfully!');
+    showAlert('Deployment Initiated', 'Service deployment initiated successfully!', 'success');
     loadServices();
   } catch (err) {
-    alert(err.message);
+    showAlert('Error', err.message, 'error');
     btn.disabled = false;
     btn.textContent = 'Deploy Service';
   }
@@ -1386,7 +1418,7 @@ document.getElementById('btn-submit-monitor').addEventListener('click', async ()
   const name = document.getElementById('new-monitor-name').value.trim();
   const url = document.getElementById('new-monitor-url').value.trim();
   const btn = document.getElementById('btn-submit-monitor');
-  if (!name || !url) return alert('Name and URL are required');
+  if (!name || !url) { showAlert('Validation Error', 'Name and URL are required', 'error'); return; }
   btn.disabled = true;
   btn.textContent = 'Adding...';
   try {
@@ -1405,7 +1437,7 @@ document.getElementById('btn-submit-monitor').addEventListener('click', async ()
     document.getElementById('monitor-list').innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-faint);">Loading monitors...</div>';
     loadUptime();
   } catch (err) {
-    alert(err.message);
+    showAlert('Error', err.message, 'error');
     btn.disabled = false;
     btn.textContent = 'Add Monitor';
   }
