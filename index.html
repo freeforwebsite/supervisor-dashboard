@@ -531,6 +531,7 @@
         <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Environment</div>
         <select id="new-svc-env" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
           <option value="node">Node.js</option>
+          <option value="python">Python</option>
           <option value="docker">Docker</option>
         </select>
       </div>
@@ -1281,7 +1282,15 @@ document.getElementById('btn-close-svc-modal').addEventListener('click', () => {
 });
 
 document.getElementById('new-svc-env').addEventListener('change', (e) => {
-  document.getElementById('new-svc-node-fields').style.display = e.target.value === 'node' ? 'flex' : 'none';
+  const isCode = e.target.value === 'node' || e.target.value === 'python';
+  document.getElementById('new-svc-node-fields').style.display = isCode ? 'flex' : 'none';
+  if (e.target.value === 'python') {
+    document.getElementById('new-svc-build').value = 'pip install -r requirements.txt';
+    document.getElementById('new-svc-start').value = 'python main.py';
+  } else if (e.target.value === 'node') {
+    document.getElementById('new-svc-build').value = 'npm install';
+    document.getElementById('new-svc-start').value = 'npm start';
+  }
 });
 
 document.getElementById('new-svc-clone').addEventListener('change', (e) => {
@@ -1350,6 +1359,11 @@ document.getElementById('btn-submit-svc').addEventListener('click', async () => 
     document.getElementById('create-service-modal').style.display = 'none';
     document.getElementById('new-svc-name').value = '';
     document.getElementById('new-svc-repo').value = '';
+    document.getElementById('new-svc-custom-env').value = '';
+    document.getElementById('new-svc-env').value = 'node';
+    document.getElementById('new-svc-build').value = 'npm install';
+    document.getElementById('new-svc-start').value = 'npm start';
+    document.getElementById('new-svc-node-fields').style.display = 'flex';
     btn.disabled = false;
     btn.textContent = 'Deploy Service';
     alert('Service deployment initiated successfully!');
