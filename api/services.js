@@ -53,6 +53,7 @@ export default async function handler(req, res) {
           const s = entry.service || entry;
           return {
             id: s.id,
+            ownerId: s.ownerId,
             name: s.name,
             type: s.type,
             status: s.suspended === 'suspended' ? 'suspended' : (s.status || 'running'),
