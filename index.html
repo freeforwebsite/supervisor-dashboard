@@ -1091,7 +1091,7 @@ async function loadLogsInto(container, svc) {
 }
 
 async function loadEnvInto(container, svc) {
-  container.innerHTML = '<div style="font-size:12px; color:var(--text-faint);">Loading…</div>';
+  container.innerHTML = '<div style="font-size:12px; color:var(--text-faint);">Loading...</div>';
   try {
     const r = await fetch(`/api/env?serviceId=${encodeURIComponent(svc.id)}&account=${svc.account}`, { headers: getCustomHeaders() });
     const data = await r.json();
@@ -1099,10 +1099,55 @@ async function loadEnvInto(container, svc) {
       container.innerHTML = `<div style="font-size:12px; color:var(--red);">${data.error || 'Failed to load'}</div>`;
       return;
     }
-    const rows = (data.envVars || []).map(v =>
-      `<div class="env-row"><span class="env-key">${v.key}</span><span class="env-val">${v.value ? '•••• ' + v.value.slice(-4) : '(empty)'}</span></div>`
-    ).join('') || '<div style="font-size:12px; color:var(--text-faint);">No environment variables set.</div>';
-    container.innerHTML = rows;
+    const envVars = data.envVars || [];
+    if (envVars.length === 0) {
+      container.innerHTML = '<div style="font-size:12px; color:var(--text-faint);">No environment variables set.</div>';
+      return;
+    }
+
+    const rawEnvString = envVars.map(v => `${v.key}=${v.value || ''}`).join('\n');
+    // Basic encoding to prevent breaking the HTML attribute
+    const encodedEnv = rawEnvString.replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    const header = `<div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+      <button class="btn btn-copy-env" data-env="${encodedEnv}" style="padding:4px 8px; font-size:11.5px; gap:4px; cursor:pointer;">
+        <svg class="icon" width="14" height="14" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+        Copy All (.env)
+      </button>
+    </div>`;
+
+    const rows = envVars.map(v => {
+      const valStr = (v.value || '').replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<div class="env-row" style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <span class="env-key">${v.key}</span>
+          <span class="env-val">${v.value ? '•••• ' + v.value.slice(-4) : '(empty)'}</span>
+        </div>
+        <button class="btn btn-copy-single" data-val="${valStr}" style="padding:2px 6px; font-size:10px; cursor:pointer;" title="Copy Value">Copy</button>
+      </div>`;
+    }).join('');
+
+    container.innerHTML = header + rows;
+
+    container.querySelector('.btn-copy-env').addEventListener('click', (e) => {
+      const btn = e.currentTarget;
+      navigator.clipboard.writeText(btn.dataset.env).then(() => {
+        const og = btn.innerHTML;
+        btn.innerHTML = '<svg class="icon" width="14" height="14" viewBox="0 0 24 24"><path fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/></svg><span style="color:var(--green)">Copied!</span>';
+        setTimeout(() => btn.innerHTML = og, 2000);
+      });
+    });
+
+    container.querySelectorAll('.btn-copy-single').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const b = e.currentTarget;
+        navigator.clipboard.writeText(b.dataset.val).then(() => {
+          const og = b.innerHTML;
+          b.innerHTML = '<span style="color:var(--green)">✓</span>';
+          setTimeout(() => b.innerHTML = og, 1500);
+        });
+      });
+    });
   } catch (err) {
     container.innerHTML = '<div style="font-size:12px; color:var(--red);">Network error loading env vars.</div>';
   }
