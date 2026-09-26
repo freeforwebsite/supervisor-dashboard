@@ -4,7 +4,7 @@
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { account, name, repo, branch, envType, buildCommand, startCommand, sourceServiceId, sourceAccount } = req.body;
+  const { account, name, repo, branch, envType, buildCommand, startCommand, sourceServiceId, sourceAccount, customEnvVars } = req.body;
   
   if (!account || !name || !repo || !envType) {
     return res.status(400).json({ error: 'Missing required fields' });
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     const ownerId = ownerData[0].owner.id;
 
     // 2. Fetch Env Vars if requested
-    let envVarsToApply = undefined;
+    let envVarsToApply = [];
     if (sourceServiceId && sourceAccount) {
       const sourceKey = resolveKey(sourceAccount);
       if (!sourceKey) {
@@ -56,6 +56,22 @@ export default async function handler(req, res) {
       } else {
         return res.status(400).json({ error: 'Failed to fetch env vars from source service.' });
       }
+    }
+    
+    // Add custom env vars
+    if (customEnvVars && Array.isArray(customEnvVars)) {
+      for (const customVar of customEnvVars) {
+        const existingIdx = envVarsToApply.findIndex(e => e.key === customVar.key);
+        if (existingIdx !== -1) {
+          envVarsToApply[existingIdx].value = customVar.value; // override
+        } else {
+          envVarsToApply.push({ key: customVar.key, value: customVar.value });
+        }
+      }
+    }
+    
+    if (envVarsToApply.length === 0) {
+      envVarsToApply = undefined;
     }
 
     // 3. Build payload

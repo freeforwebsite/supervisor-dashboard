@@ -548,6 +548,10 @@
         <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Clone Environment Variables From (Optional)</div>
         <select id="new-svc-clone" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text);"></select>
       </div>
+      <div>
+        <div style="font-size:12.5px; font-weight:600; margin-bottom:4px;">Custom Environment Variables (Optional)</div>
+        <textarea id="new-svc-custom-env" placeholder="KEY1=value1&#10;KEY2=value2" rows="3" style="width:100%; box-sizing:border-box; font-size:13px; padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-family:monospace; resize:vertical;"></textarea>
+      </div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button class="btn" id="btn-close-svc-modal" style="flex:1; justify-content:center;">Cancel</button>
         <button class="btn primary" id="btn-submit-svc" style="flex:1; justify-content:center;">Deploy Service</button>
@@ -1301,6 +1305,7 @@ document.getElementById('btn-submit-svc').addEventListener('click', async () => 
   const buildCommand = document.getElementById('new-svc-build').value.trim();
   const startCommand = document.getElementById('new-svc-start').value.trim();
   const cloneVal = document.getElementById('new-svc-clone').value;
+  const customEnvRaw = document.getElementById('new-svc-custom-env').value;
   const btn = document.getElementById('btn-submit-svc');
 
   let sourceServiceId = null;
@@ -1312,6 +1317,22 @@ document.getElementById('btn-submit-svc').addEventListener('click', async () => 
       sourceAccount = parsed.sourceAccount;
     } catch(e) {}
   }
+  
+  const customEnvVars = [];
+  if (customEnvRaw) {
+    const lines = customEnvRaw.split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const idx = trimmed.indexOf('=');
+      if (idx !== -1) {
+        customEnvVars.push({
+          key: trimmed.substring(0, idx).trim(),
+          value: trimmed.substring(idx + 1).trim()
+        });
+      }
+    }
+  }
 
   if (!account || !name || !repo) return alert('Target Account, Name, and Repository URL are required.');
 
@@ -1321,7 +1342,7 @@ document.getElementById('btn-submit-svc').addEventListener('click', async () => 
     const r = await fetch('/api/create-service', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getCustomHeaders() },
-      body: JSON.stringify({ account, name, repo, branch, envType, buildCommand, startCommand, sourceServiceId, sourceAccount })
+      body: JSON.stringify({ account, name, repo, branch, envType, buildCommand, startCommand, sourceServiceId, sourceAccount, customEnvVars })
     });
     const result = await r.json();
     if (!r.ok) throw new Error(result.error || 'Failed to create service');
